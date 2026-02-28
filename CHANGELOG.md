@@ -25,4 +25,4 @@ First versioned release. Core piano plugin with Figma-aligned UI, full effect ch
 
 ---
 
-[1.0.0]: https://github.com/your-username/MatildaPiano/releases/tag/v1.0.0
+[1.0.0]: https://github.com/YOUR_USERNAME/MatildaPiano/releases/tag/v1.0.0

@@ -2,7 +2,7 @@
 
 A beautiful piano VST plugin built with JUCE, featuring a custom UI design and professional DSP effects.
 
-**Status:** **M1** (functionality) complete and frozen. **M2a** GUI alignment, **M2b** fonts, **M2c** effect module + delay Off + XY enabled (2026-02-27). See **`docs/MILESTONES.md`**.
+**Version:** **v1.0.0** (2026-02-27). See **`CHANGELOG.md`** and **`docs/MILESTONES.md`**.
 
 **Designers / first-time build:** See **[BUILD-SIMPLE.md](BUILD-SIMPLE.md)** for simple steps and the **full clean + build** script (`./clean-and-build.sh`) when you get errors.
 
@@ -159,6 +159,20 @@ Place WAV files named by note + octave 0–7 (e.g. `c0.wav`, `c#5.wav`). Octave 
 - [ ] Sustain pedal support
 - [ ] Round-robin sample playback
 - [ ] Windows VST3 build
+
+## Pushing to GitHub
+
+The repo is initialized with v1.0.0 tagged. To push:
+
+1. **Create a new repository** on GitHub (e.g. `MatildaPiano`).
+2. **Add remote and push:**
+   ```bash
+   git remote add origin https://github.com/YOUR_USERNAME/MatildaPiano.git
+   git branch -M main
+   git push -u origin main
+   git push origin v1.0.0
+   ```
+3. Optionally create a **Release** on GitHub from the v1.0.0 tag.
 
 ## License
 
