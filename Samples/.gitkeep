@@ -1,0 +1,3 @@
+# Place piano sample files here (WAV or AIFF format)
+# Samples will be loaded automatically when the plugin initializes
+# Expected structure: samples mapped to MIDI notes and velocity ranges

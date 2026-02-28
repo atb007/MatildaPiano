@@ -1,0 +1,38 @@
+# Build directories
+build/
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.cmake
+!CMakeLists.txt
+
+# Compiled binaries
+*.component
+*.vst3
+*.app
+
+# IDE
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# JUCE
+JuceLibraryCode/
+BinaryData.h
+BinaryData.cpp
+
+# Temporary files
+*.tmp
+*.log
