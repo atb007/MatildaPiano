@@ -3,6 +3,8 @@
 **For:** BMM Dev Agent (`/bmad-agent-bmm-dev`)  
 **Use this file as the primary context when starting implementation. Keep documentation updated as you build.**
 
+**GitHub:** `atb007` — use for remote URLs and releases (e.g. `https://github.com/atb007/MatildaPiano`).
+
 **Milestone:** **M1** complete (frozen). **M2a** GUI alignment complete. **M2b** fonts fixed. **M2c** effect module + delay Off + XY enabled (2026-02-27). See `docs/MILESTONES.md`.
 
 ---

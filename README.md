@@ -167,7 +167,7 @@ The repo is initialized with v1.0.0 tagged. To push:
 1. **Create a new repository** on GitHub (e.g. `MatildaPiano`).
 2. **Add remote and push:**
    ```bash
-   git remote add origin https://github.com/YOUR_USERNAME/MatildaPiano.git
+   git remote add origin https://github.com/atb007/MatildaPiano.git
    git branch -M main
    git push -u origin main
    git push origin v1.0.0
