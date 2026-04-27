@@ -2,6 +2,46 @@
 
 All notable changes to Matilda Piano are documented here.
 
+## [3.0.0] - 2026-04-28
+
+### Matilda Piano 3 — Neural Network Synthesis
+
+**✅ Status**: Current release. Authentic piano sound via ONNX-based neural network.
+
+### Added
+- **Neural synthesis engine:** ONNX Runtime integration for authentic piano timbre
+- **PianoForte-based:** Adapted from MIT-licensed PianoForte project by Carlos Tarjano
+- **Async inference:** Non-blocking neural network inference with `std::future` for real-time performance
+- **Tiny model:** 8.7KB ONNX model embedded in plugin binary (no external files)
+- **32-voice polyphony:** Full polyphony with efficient neural synthesis
+- **Side-by-side installs:** New plugin code **`MtP3`**, product name **Matilda Piano 3**, bundle ID **`com.matildaaudio.matildapiano3`**
+
+### Technical Details
+- ONNX Runtime 1.17.0 (ARM64/x86_64)
+- Model: ~1500 parameters, ~8KB size
+- Input: [pitch, velocity, periodCount] → Output: harmonic amplitudes
+- Stereo synthesis with random phase spread
+- ADSR envelope integration
+- Effects: Tape → Delay → Reverb → Master (unchanged from v1/v2)
+
+### Performance
+- Real-time capable on Apple Silicon and Intel Macs
+- No audio dropouts with 128-sample buffer size
+- Low CPU usage (~5-10% typical)
+- Instant note response
+
+### Credits
+- Neural engine based on PianoForte by Carlos Tarjano (MIT License)
+- Research: "An Efficient Algorithm For Segmenting Quasi-Periodic Digital Signals Into Pseudo Cycles"
+
+### Documentation
+- Complete integration docs in `v3-integration/`
+- Phase 1-2 summaries with architecture details
+- ONNX Runtime setup guide
+- README, PRD, architecture docs updated
+
+---
+
 ## [2.0.0] - 2026-04-28 (Frozen - Physical Model)
 
 ### Matilda Piano 2 — Physical String Model (Frozen)

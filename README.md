@@ -2,13 +2,15 @@
 
 <img width="1074" height="483" alt="Piano Frame" src="https://github.com/user-attachments/assets/f1f91ab5-2b36-41af-a9da-d5a9d52389c8" />
 
-A beautiful piano AU plugin built with JUCE, featuring a custom UI design and professional DSP effects.
+A beautiful piano AU plugin built with JUCE, featuring neural network synthesis and professional DSP effects.
 
-**Version:** **v2.0.0 (FROZEN)** — Physical string model. Development continues with **v3.0.0** (neural network approach). See **`CHANGELOG.md`** and **`docs/MILESTONES.md`**.
+**Version:** **v3.0.0** — Neural network synthesis (ONNX Runtime). See **`CHANGELOG.md`** and **`docs/MILESTONES.md`**.
 
-**Note:** v2.0 uses Karplus-Strong physical modeling (frozen). v1.0.0 (sampler) available via git tag `v1.0.0`.
+**Previous versions:**
+- v2.0.0 (frozen): Karplus-Strong physical modeling - see branch `v2-physical-model`
+- v1.0.0 (archived): Sample-based - see git tag `v1.0.0`
 
-**Side-by-side installs:** This build installs as **Matilda Piano 2** (new `PLUGIN_CODE` **MtP2**, bundle ID `com.matildaaudio.matildapiano2`) so it does not replace **Matilda Piano** v1 in your DAW.
+**Side-by-side installs:** This build installs as **Matilda Piano 3** (new `PLUGIN_CODE` **MtP3**, bundle ID `com.matildaaudio.matildapiano3`) so it does not replace previous versions in your DAW.
 
 **Designers / first-time build:** See **[BUILD-SIMPLE.md](BUILD-SIMPLE.md)** for simple steps and the **full clean + build** script (`./clean-and-build.sh`) when you get errors.
 
