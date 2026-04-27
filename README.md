@@ -4,9 +4,11 @@
 
 A beautiful piano AU plugin built with JUCE, featuring a custom UI design and professional DSP effects.
 
-**Version:** **v2.0.0** (physical string model). **v1.0.0** (sampler) remains available via git tag `v1.0.0` and the `version-1/` tree. See **`CHANGELOG.md`** and **`docs/MILESTONES.md`**.
+**Version:** **v2.0.0 (FROZEN)** — Physical string model. Development continues with **v3.0.0** (neural network approach). See **`CHANGELOG.md`** and **`docs/MILESTONES.md`**.
 
-**Side-by-side with v1:** This build installs as **Matilda Piano 2** (new `PLUGIN_CODE` **MtP2**, bundle ID `com.matildaaudio.matildapiano2`) so it does not replace **Matilda Piano** v1 in your DAW.
+**Note:** v2.0 uses Karplus-Strong physical modeling (frozen). v1.0.0 (sampler) available via git tag `v1.0.0`.
+
+**Side-by-side installs:** This build installs as **Matilda Piano 2** (new `PLUGIN_CODE` **MtP2**, bundle ID `com.matildaaudio.matildapiano2`) so it does not replace **Matilda Piano** v1 in your DAW.
 
 **Designers / first-time build:** See **[BUILD-SIMPLE.md](BUILD-SIMPLE.md)** for simple steps and the **full clean + build** script (`./clean-and-build.sh`) when you get errors.
 

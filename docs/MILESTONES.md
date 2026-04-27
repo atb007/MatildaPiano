@@ -78,16 +78,40 @@ Track major project phases. Update this file when a milestone is completed or a 
 
 ---
 
-## Milestone 3: Physical engine (v2.0.0) — 2026-04-24
+## Milestone 3: Physical engine (v2.0.0) — 2026-04-28 (FROZEN)
 
-**Status:** In progress / initial release
+**Status:** ✅ Complete (Frozen)
+
+**Decision:** Physical modeling approach frozen. While functional and stable, the timbre resembles plucked strings more than grand piano. Development continues with **Milestone 4 (v3.0.0)** using neural network synthesis (PianoForte-based approach) for authentic piano sound.
 
 **Scope:** Replace sample-based piano with a real-time **Karplus–Strong–style** string model; keep **same UI and parameter behaviour** (ADSR, tape XY, delay, reverb, master). Install **side-by-side** with v1 via new plugin code and bundle ID.
 
-**Delivered (initial):**
-- **Engine:** `MatildaPhysicalVoice` / `MatildaPhysicalSound`; `setupPhysicalEngine()` registers one sound for MIDI 0–127; no `loadSamples()` / WAV dependency.
-- **Processor / FX:** Unchanged routing: synth → polyphony gain → tape → delay → reverb → master (see `PluginProcessor.cpp`).
-- **Build:** `VERSION` / `project()` **2.0.0**; `PLUGIN_CODE` **MtP2**; `PRODUCT_NAME` **Matilda Piano 2**; bundle ID `com.matildaaudio.matildapiano2`.
-- **Docs / git:** `docs/architecture.md`, `README.md`, `PRD.md`, `CHANGELOG.md`, `DEV-HANDOFF.md` updated; development branch **`v2-physical-model`**.
+**Delivered:**
+- **Engine:** `MatildaPhysicalVoice` / `MatildaPhysicalSound`; Karplus-Strong delay-line synthesis with inharmonicity, two-pole damping, velocity-dependent brightness
+- **Stability:** Auto-recovery from explosions, energy monitoring, soft clipping, Musical Typing support
+- **Processor / FX:** Unchanged routing: synth → polyphony gain → tape → delay → reverb → master
+- **Build:** `VERSION` **2.0.0**; `PLUGIN_CODE` **MtP2**; `PRODUCT_NAME` **Matilda Piano 2**; bundle ID `com.matildaaudio.matildapiano2`
+- **Docs / git:** Full documentation updated; branch **`v2-physical-model`**
 
-**References:** `docs/architecture.md`, `_bmad-output/planning-artifacts/research/technical-synth-pads-physical-modeling-piano-research-2026-02-28.md`.
+**Limitations Identified:**
+- Timbre more similar to plucked string than struck piano keys
+- Extensive tuning needed for realistic piano character
+- Physical modeling inherently limited without full soundboard/frame modeling
+
+**References:** `docs/architecture.md`, research docs, `CHANGELOG.md`
+
+---
+
+## Milestone 4: Neural network engine (v3.0.0) — Starting 2026-04-28
+
+**Status:** Planning / Setup
+
+**Scope:** Replace physical model with **neural network synthesis** using PianoForte engine (MIT licensed). Keep all UI, effects, and parameter control. Achieve authentic grand piano timbre.
+
+**Approach:**
+- Integrate PianoForte's ONNX-based neural piano synthesis
+- Preserve UI (Figma design), effects chain, ADSR, XY pad
+- Use their trained models (Steinway, Yamaha) or train custom
+- Separate development folder: `v3-neural-network/`
+
+**Target:** Authentic piano sound with ~4-6 hours integration work.

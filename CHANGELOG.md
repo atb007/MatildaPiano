@@ -2,21 +2,34 @@
 
 All notable changes to Matilda Piano are documented here.
 
-## [2.0.0] - 2026-04-24
+## [2.0.0] - 2026-04-28 (Frozen - Physical Model)
 
-### Matilda Piano 2 — physical string model
+### Matilda Piano 2 — Physical String Model (Frozen)
 
-Major version: **sample-based engine replaced** by a **Karplus–Strong–style** string voice (`MatildaPhysicalVoice`) and full-range `MatildaPhysicalSound`. **UI, parameters, and effect chain behaviour are unchanged** from v1 so projects and muscle memory transfer cleanly.
+**Status**: Frozen. This version uses Karplus-Strong physical modeling. Development continues with v3 (neural network approach).
 
 ### Added
-- **Physical engine:** Per-voice delay-line string with noise excitation; pitch wheel; velocity-sensitive hammer level; note-dependent loop damping for brighter high notes vs warmer lows.
-- **Side-by-side installs:** New **four-character** AU code **`MtP2`**, product name **Matilda Piano 2**, bundle ID **`com.matildaaudio.matildapiano2`**, CMake **`VERSION` 2.0.0**.
+- **Physical engine:** Per-voice delay-line string with noise excitation, pitch wheel, velocity-sensitive hammer level
+- **Side-by-side installs:** New four-character AU code **`MtP2`**, product name **Matilda Piano 2**, bundle ID **`com.matildaaudio.matildapiano2`**, CMake **`VERSION` 2.0.0**
+- **Stability features:** Auto-recovery from signal explosions, energy monitoring, soft clipping with tanh()
+- **Timbre improvements:** Inharmonicity modeling, two-pole damping, velocity-dependent brightness, percussive body thump
+
+### Known Limitations
+- **Timbre:** Physical model sounds more like plucked string than grand piano
+- **Tuning:** Extensive parameter tuning needed for realistic piano timbre
+- **Volume:** Requires careful gain staging due to feedback-based synthesis
+
+### Technical Details
+- Feedback gain: 0.983-0.990 (stable but limited sustain)
+- Hammer excitation: 0.5-2ms contact time with Gaussian envelope
+- Output gain: 2.2-3.7× with velocity scaling
+- Safety: Energy tracking, explosion detection, auto-reset after 20 bad samples
 
 ### Removed
-- **`MatildaSamplerVoice` / `MatildaSamplerSound`** and **`loadSamples()`** from the main `Source/` tree (v1 snapshot remains under **`version-1/`** and tag **`v1.0.0`**).
+- **`MatildaSamplerVoice` / `MatildaSamplerSound`** and **`loadSamples()`** from the main `Source/` tree (v1 snapshot remains under **`version-1/`** and tag **`v1.0.0`**)
 
 ### Documentation
-- README, PRD, architecture, milestones, dev handoff updated for v2.
+- README, PRD, architecture, milestones, dev handoff updated for v2
 
 ---
 
