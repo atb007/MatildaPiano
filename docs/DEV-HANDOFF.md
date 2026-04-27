@@ -5,7 +5,7 @@
 
 **GitHub:** `atb007` — use for remote URLs and releases (e.g. `https://github.com/atb007/MatildaPiano`).
 
-**Milestone:** **M1** complete (frozen). **M2a** GUI alignment complete. **M2b** fonts fixed. **M2c** effect module + delay Off + XY enabled (2026-02-27). See `docs/MILESTONES.md`.
+**Milestone:** **M1–M2c** (v1 sampler + GUI) complete. **M3 / v2.0.0** — physical engine on branch **`v2-physical-model`** (2026-04-24). See `docs/MILESTONES.md`.
 
 ---
 
@@ -16,7 +16,7 @@
   - The JUCE **source directory** (e.g. your `JUCE 2` folder); CMake will use `add_subdirectory` and build JUCE as part of the project.
 - **User’s JUCE path (this machine):** `'/Users/udai.deori/Desktop/CursorAI/JUCE 2'` — use quoted in shell/CMake because of the space.
 
-Nothing else is required to build; samples are loaded from user folders at runtime (see below).
+Nothing else is required to build. **v2** does not need sample folders; **v1** behaviour is documented under `version-1/`.
 
 ---
 
@@ -34,12 +34,12 @@ cmake --build build --config Release
 ```
 
 **Outputs:**
-- **AU:** Copied to `~/Library/Audio/Plug-Ins/Components/MatildaPiano.component` (if COPY_PLUGIN_AFTER_BUILD is on).
-- **Standalone:** `build/MatildaPiano_artefacts/Release/Matilda Piano.app` — use this for fast UI/UX iteration without a DAW.
+- **AU:** Copied to `~/Library/Audio/Plug-Ins/Components/Matilda Piano 2.component` (if COPY_PLUGIN_AFTER_BUILD is on). v1 used `Matilda Piano.component`.
+- **Standalone:** `build/MatildaPiano_artefacts/Release/Matilda Piano 2.app` (path may include a `Standalone` subfolder depending on JUCE layout).
 
 **Run Standalone:**
 ```bash
-open build/MatildaPiano_artefacts/Release/Matilda\ Piano.app
+open build/MatildaPiano_artefacts/Release/Matilda\ Piano\ 2.app
 ```
 
 ---
@@ -49,23 +49,23 @@ open build/MatildaPiano_artefacts/Release/Matilda\ Piano.app
 | Area | Status | Notes |
 |------|--------|--------|
 | CMake | Done | AU + Standalone; BinaryData optional when `Assets/` has PNGs. |
-| Processor | Done | `PluginProcessor`: APVTS, synth, tape/delay/reverb/gain chain, `loadSamples()` from disk. Effect chain enabled (MATILDA_BYPASS_DSP_DEBUG=0); delay lowest position = Off; XY pad drives tape. |
+| Processor | Done | `PluginProcessor`: APVTS, synth, tape/delay/reverb/gain chain, `setupPhysicalEngine()` (v2). Effect chain enabled (MATILDA_BYPASS_DSP_DEBUG=0); delay lowest position = Off; XY pad drives tape. |
 | Parameters | Done | `Parameters.h/.cpp`: ADSR, reverb, delay time, master vol, XY X/Y. |
-| Sampler | Done | `MatildaSamplerVoice` / `MatildaSamplerSound`; 32 voices; ADSR per voice. |
+| Physical engine (v2) | Done | `MatildaPhysicalVoice` / `MatildaPhysicalSound`; 32 voices; ADSR per voice; Karplus–Strong–style loop. |
 | DSP | Done | `TapeModule`, `DelayModule` (tempo-synced subdivisions), `ReverbModule`. |
 | UI | M2a+M2b done | Figma 1074×483; gradient + left panel (BinaryData or ~/Documents/MatildaPiano/Assets); chickenhead knobs; XY pad; keyboard; dynamic scale. **Fonts:** Jacquard 24, Kode Mono, Inter load from BinaryData, bundle Resources (Standalone), user Assets, or project Assets (nested or flat paths). |
-| Sample loading | Done | Scans `~/Music/MatildaPiano/Samples`, then `~/Documents/MatildaPiano/Samples`; WAV/AIFF; note name or MIDI number in filename. Recommended 3–8 s per note; max 30 s. |
-| Keyboard range | Done | On-screen keyboard C0–C7 (MIDI 12–96). Sampled range per keySamples (C1–C8 in mapping; keys shown to C7). |
+| Sample loading | v1 only | v2: none. v1: see `version-1/README.md` and `docs/architecture.md` (historical). |
+| Keyboard range | Done | On-screen keyboard C0–C7 (MIDI 12–96). v2 engine: MIDI 0–127. |
 | Figma assets | Optional | Background: `Assets/background.png` (embed) or `~/Documents/MatildaPiano/Assets/background.png` (no rebuild). |
 | Tests | Started | Unit: `Tests/MatildaPianoTests.cpp` + target `MatildaPianoTests`. Manual: `docs/TESTING-LOG.md` for Standalone/AU sessions and sound/GUI checklist. See `docs/testing.md`. |
-| “No samples found” UI | Done | Processor exposes `getSampleLoadStatus()`; editor draws status in `paint()` when non-empty (bottom-left, amber). |
+| Status line UI | v2 idle | `getSampleLoadStatus()` kept for compatibility; v2 usually leaves it **empty** (no samples to miss). |
 | Docs | Living | Update `docs/architecture.md`, `README.md`, `QUICKSTART.md`, `docs/testing.md`, `docs/TESTING-LOG.md` when you change behaviour or add features. |
 
 **Build / toolchain (current):**
 - CMake uses **C + CXX** (for JUCE subprojects). **JUCE_BUILD_EXTRAS=OFF** when using JUCE source to avoid juceaide; **juce_generate_juce_header** used for plugin and test target. Xcode SDK or Command Line Tools SDK set when using JUCE source. Scripts: `build.sh`, `clean-and-build.sh` (full clean + build; supports Xcode SDK).
 
 **Suggested next steps:**
-- **M2c (2026-02-27):** Effect module (tape, delay, reverb) fully enabled; delay knob lowest value = Off (mix 0, label "Off"); XY pad effects (wow/flutter, saturation, tone) active. See `docs/MILESTONES.md`.
+- **v2 DSP:** Refine piano realism (inharmonicity, hammer filter, stereo pair); profile CPU at max polyphony.
 - Add or extend tests when adding new behaviour; keep docs in sync (architecture, PRD, README, QUICKSTART, testing).
 
 ---

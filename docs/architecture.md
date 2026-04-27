@@ -1,14 +1,14 @@
 ## MatildaPiano — code-level architecture
 
-This document captures how the plugin is structured in code, with emphasis on threading, voice management, parameter mapping, file scanning rules, error handling, and performance constraints.
+This document captures how the plugin is structured in code, with emphasis on threading, voice management, parameter mapping, error handling, and performance constraints.
 
-**Project phase:** M1 complete (frozen). M2a + M2b + M2c complete (GUI, fonts, effect module + delay Off + XY). See `docs/MILESTONES.md`.
+**Project phase:** **v2.0.0** — physical string engine (Karplus–Strong style) replaces the v1 sampler. Milestones M1–M2c describe the original sampler + GUI work; see `docs/MILESTONES.md` for history and the v2 milestone.
 
 ### Strategy: single path (JUCE only)
 
-- **Deliverable:** AU plugin on macOS (e.g. GarageBand). This repo is the only codebase.
+- **Deliverable:** **Matilda Piano 2** — AU plugin on macOS (e.g. GarageBand), installable **side-by-side** with v1 (`PLUGIN_CODE` / bundle ID differ). This repo is the only codebase.
 - **Iteration:** Use the **Standalone** target for fast UI/UX iteration without a DAW; treat it as the day-to-day prototype. Test in GarageBand when ready.
-- **UI ↔ engine:** UI = `PluginEditor`, core = `PluginProcessor`; they connect via `AudioProcessorValueTreeState` and attachments. Layout follows Figma frame `4203:94317` (1074×483).
+- **UI ↔ engine:** UI = `PluginEditor`, core = `PluginProcessor`; they connect via `AudioProcessorValueTreeState` and attachments. Layout follows Figma frame `4203:94317` (1074×483). **v2 keeps the same controls and parameter behaviour** as v1.
 
 ### High-level structure (current JUCE codebase)
 
@@ -18,13 +18,14 @@ This document captures how the plugin is structured in code, with emphasis on th
   - Owns `juce::Synthesiser` (voices + sounds)
   - Owns DSP chain modules: `TapeModule`, `DelayModule`, `ReverbModule`, `masterGain`
   - Pulls host tempo from `AudioPlayHead::getPosition()` → `PositionInfo::getBpm()` (not deprecated `getCurrentPosition`).
+  - Calls `setupPhysicalEngine()` from the constructor: registers one `MatildaPhysicalSound` covering MIDI 0–127 (no disk I/O).
 - **Editor/UI**: `Source/PluginEditor.h/.cpp`
   - Pure JUCE UI (sliders, labels, XY pad, MIDI keyboard)
   - Parameter binding via `AudioProcessorValueTreeState::SliderAttachment`
   - Uses pixel coordinates copied from Figma frame `4203:94317` (1074×483)
-- **Sampler/Voices**
-  - `Source/MatildaSamplerVoice.*`: voice + ADSR envelope
-  - `Source/MatildaSamplerSound.*`: wrapper around JUCE `SamplerSound`
+- **Physical engine / voices**
+  - `Source/MatildaPhysicalVoice.*`: `juce::SynthesiserVoice` implementation — delay-line string loop, noise excitation “hammer”, per-voice `juce::ADSR` (same role as v1: shapes output; parameters from APVTS).
+  - `Source/MatildaPhysicalSound.*`: `juce::SynthesiserSound` — `appliesToNote` for full MIDI range.
 - **DSP modules**
   - `Source/TapeModule.*`: wow/flutter modulation + saturation + tone filter. IIR filter coefficients set via `toneFilter.coefficients = IIR::Coefficients<float>::makeLowPass(...)` (assign Ptr).
   - `Source/DelayModule.*`: tempo-synced delay using `dsp::DelayLine`. Subdivision table uses `const char*` for display (literal type for `static constexpr`).
@@ -49,17 +50,17 @@ JUCE plugins primarily run on two threads:
 - Parameter reads in `updateParameters()` use `getRawParameterValue(...)->load()` which is safe for the audio thread.
 - `ReverbModule` preallocates a wet buffer during `prepare()` and reuses it (no per-block allocations under normal conditions).
 
-**Important note**: sample loading performs file scanning and decoding. It must not be moved into `processBlock()`; current implementation calls `loadSamples()` in the processor constructor, and should be considered “initialization only.”
+**Engine init:** `setupPhysicalEngine()` runs on the message thread in the processor constructor (adds sounds only). `MatildaPhysicalVoice::setSampleRate()` runs in `prepareToPlay()` and **allocates/resizes** the per-voice delay line there — not on the audio thread during playback.
 
 ### Voice management
 
 - Voices are created once:
-  - `MatildaPianoAudioProcessor::MatildaPianoAudioProcessor()` adds `numVoices = 32` instances of `MatildaSamplerVoice`.
+  - `MatildaPianoAudioProcessor::MatildaPianoAudioProcessor()` adds `numVoices = 32` instances of `MatildaPhysicalVoice`.
 - MIDI triggering:
   - `synth.renderNextBlock(buffer, midiMessages, ...)` handles note on/off and voice stealing internally.
 - Envelope:
-  - `MatildaSamplerVoice` uses `juce::ADSR` and updates ADSR params from processor parameters.
-- **Polyphony gain:** The synthesiser **sums** all voices into the same buffer; many notes → clip → burst then flat “blank” sound. After `renderNextBlock()`: apply gain **1/numVoices (1/32)** so 32 voices peak at 1.0 (no clamp there); then safety clamp to [-1, 1]. Master gain uses make-up (×16) so a single note stays audible; a final clamp after the full chain prevents output > 1.0 (see `PluginProcessor::processBlock()`).
+  - `MatildaPhysicalVoice` uses `juce::ADSR` and updates ADSR params from processor parameters (same IDs/ranges as v1).
+- **Polyphony gain:** The synthesiser **sums** all voices into the same buffer; many notes → clip. After `renderNextBlock()`: apply gain **1/numVoices (1/32)** so 32 voices peak at 1.0 (no clamp there); then safety clamp to [-1, 1]. Master gain uses make-up (×16) so a single note stays audible; a final clamp after the full chain prevents output > 1.0 (see `PluginProcessor::processBlock()`).
 
 ### Parameter mapping
 
@@ -93,46 +94,27 @@ Mapping:
 Performance note:
 - `DelayModule::process()` currently calls `updateDelayTime()` each block. This is acceptable for a first version but can be optimized by caching the last subdivision index and last BPM.
 
-### Sample scanning rules (open-source libraries)
+### v1 sample-based engine (historical)
 
-Sample loading **search order**:
-
-1. **keySamples** — project folder used by the plugin:
-   - **In app bundle:** `Contents/Resources/keySamples` (Standalone; CMake copies project `keySamples/` into the bundle when present).
-   - **Next to the .app:** `keySamples` in the same directory as `Matilda Piano.app` (e.g. `build/MatildaPiano_artefacts/Release/Standalone/keySamples`).
-   - **Naming:** note letter + optional `#` + octave index **0–7**, e.g. `c0.wav`, `c#5.wav`, `a6.wav`. Octave 0 = C1 = MIDI 24; octave 7 = C8 = MIDI 108. PRD: 7 octaves. Lowercase or uppercase.
-2. **User folders** (if no keySamples found):
-   - `~/Music/MatildaPiano/Samples`
-   - `~/Documents/MatildaPiano/Samples`
-   - **Naming:** note name (e.g. `Piano_C4.wav`) or MIDI number (e.g. `Piano_60.wav`); see below.
-
-Supported formats (all locations): WAV (`.wav`, `.wave`), AIFF (`.aif`, `.aiff`).
-
-**Sample duration (for upload / content):**
-- **Recommended per-note length: 3–8 seconds.** Enough for natural decay; keeps load time and memory reasonable.
-- **Maximum length used by the plugin: 30 seconds.** Samples are loaded with `maxSampleLengthSeconds = 30.0`; any extra is not played.
-
-**Filename parsing (user folders only when keySamples not used):**
-1. **Note name tokens**: `C4`, `F#3`, `Bb2` (case-insensitive)
-2. **MIDI number tokens**: `0..127`
-3. **Fallback**: if no note can be parsed, map the sample across all notes (debug-friendly but not musically correct)
+v1 loaded WAV/AIFF from `keySamples` or `~/Music|Documents/MatildaPiano/Samples`. That implementation lived in `MatildaSamplerVoice` / `MatildaSamplerSound` and `loadSamples()`. **v2 removes runtime sample dependency**; an archived copy of the v1 tree remains under `version-1/` for reference.
 
 ### Keyboard range and GUI labels (PRD §2.4)
 
-The on-screen keyboard displays **C0–C7** (MIDI 12–96). Implemented via `setAvailableRange(12, 96)`, `setLowestVisibleKey(12)`, and **`setOctaveForMiddleC(4)`** so white keys are labelled C0, C1, … C7. **Sample mapping** is unchanged (keySamples c0→C1 … c7→C8); keys C1–C7 have samples, C0 has none by default. Host MIDI outside the displayed range is still processed if samples exist.
+The on-screen keyboard displays **C0–C7** (MIDI 12–96). Implemented via `setAvailableRange(12, 96)`, `setLowestVisibleKey(12)`, and **`setOctaveForMiddleC(4)`** so white keys are labelled C0, C1, … C7. The physical engine responds to the full MIDI range supported by `MatildaPhysicalSound` (0–127). Host MIDI outside the displayed range is still processed.
 
 ### Error handling strategy
 
-Current strategy:
-- If sample folders don’t exist or no files found: **silent no-sound** (plugin loads, but plays nothing), and a **status message** is set for the UI.
-- If a file can’t be decoded: it is skipped.
-- **Status message:** The processor stores a `sampleLoadStatus_` string (e.g. “No samples found — add WAV/AIFF to …”). The editor reads it on the message thread and draws it in `paint()` when non-empty (bottom-left, amber text). Updated only in `loadSamples()` (constructor / init), so safe to read from the UI thread.
+- **v2:** No sample folders required. `sampleLoadStatus_` is usually **empty**; the editor’s amber status line appears only if a future engine sets a non-empty message.
+- If a file can’t be decoded (N/A for core v2 engine): N/A.
+- **Status hook:** `getSampleLoadStatus()` remains for UI compatibility.
 
 ### Performance constraints / rules of thumb
 
 - **Audio thread**
   - Avoid allocations, file I/O, logging
   - Prefer per-block updates over per-sample where possible
+- **Physical voices**
+  - Per-sample work includes delay read/write and one-pole loop filter; CPU scales with polyphony (32 voices max).
 - **DSP**
   - Reverb uses a preallocated wet buffer
   - Tape module is currently simple and may be CPU-heavy per sample; optimize later by:
@@ -146,4 +128,3 @@ The UI is designed for a fixed frame size (matching Figma):
 - Control placement: pixel-perfect bounds (see `MatildaPianoAudioProcessorEditor::resized()`)
 - All text/labels are JUCE-rendered (not baked into the PNG), so they can be swapped later for custom fonts or localization.
 - Fonts use `juce::Font(juce::FontOptions(...))` for JUCE 7/8 compatibility (deprecated `Font(float)` replaced). Custom fonts (Jacquard 24, Kode Mono, Inter) load from: (1) BinaryData (if embedded by CMake), (2) app bundle `Contents/Resources/Assets` when running Standalone, (3) `~/Documents/MatildaPiano/Assets`, (4) project `Assets/` from CWD. Both nested paths (`Fonts/Jacquard_24/Jacquard24-Regular.ttf`, `Fonts/Kode_Mono/static/KodeMono-Bold.ttf`) and flat paths (`Fonts/Jacquard24-Regular.ttf`, `Fonts/KodeMono-VariableFont_wght.ttf`) are tried so repo or bundle layout works.
-

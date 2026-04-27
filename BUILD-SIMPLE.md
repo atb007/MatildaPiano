@@ -63,7 +63,7 @@ Use this when you’ve already built successfully and only changed design or cod
    ```
 
 When it finishes, you can open the app:  
-**Matilda Piano.app** → usually in `build/MatildaPiano_artefacts/Release/`.
+**Matilda Piano 2.app** → usually in `build/MatildaPiano_artefacts/Release/` (or `Release/Standalone/`).
 
 ---
 
@@ -126,9 +126,9 @@ export JUCE_DIR='/Users/udai.deori/Desktop/CursorAI/JUCE 2'
 ## After a successful build
 
 - **Standalone app (no DAW):**  
-  Open: `build/MatildaPiano_artefacts/Release/Matilda Piano.app`
+  Open: `build/MatildaPiano_artefacts/Release/Matilda Piano 2.app`
 - **In GarageBand:**  
-  The AU plugin is copied to your system; in GarageBand, add a Software Instrument and choose **Matilda Piano**.
+  The AU plugin is copied to your system; in GarageBand, add a Software Instrument and choose **Matilda Piano 2** (v1 is **Matilda Piano** if still installed).
 
 ---
 

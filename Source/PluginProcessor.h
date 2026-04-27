@@ -3,8 +3,8 @@
 #include <array>
 #include <JuceHeader.h>
 #include "Parameters.h"
-#include "MatildaSamplerVoice.h"
-#include "MatildaSamplerSound.h"
+#include "MatildaPhysicalVoice.h"
+#include "MatildaPhysicalSound.h"
 #include "TapeModule.h"
 #include "DelayModule.h"
 #include "ReverbModule.h"
@@ -45,15 +45,15 @@ public:
     
     juce::AudioProcessorValueTreeState& getValueTreeState() { return valueTreeState; }
     
-    // Sample loading
-    void loadSamples();
+    /** Registers the physical-model sound (v2 — no WAV samples). */
+    void setupPhysicalEngine();
     juce::Synthesiser& getSynth() { return synth; }
 
     /** Shared keyboard state for the on-screen MidiKeyboardComponent; processor injects it into MIDI in processBlock. */
     juce::MidiKeyboardState& getKeyboardState() { return keyboardState; }
     const juce::MidiKeyboardState& getKeyboardState() const { return keyboardState; }
 
-    /** Status message for UI (e.g. "No samples found"). Updated in loadSamples(); safe to read from message thread. */
+    /** Optional status line for UI (v2: usually empty). Safe to read from message thread. */
     juce::String getSampleLoadStatus() const { return sampleLoadStatus_; }
 
 private:

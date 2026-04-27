@@ -2,7 +2,7 @@
 
 **If you’re a designer or new to building:** use **[BUILD-SIMPLE.md](BUILD-SIMPLE.md)** for plain-language steps and a **full clean + build** script (`./clean-and-build.sh`) when you get errors.
 
-**Project status:** M1 complete; M2a + M2b + M2c complete (GUI, fonts, effect module + delay Off + XY). See `docs/MILESTONES.md`.
+**Project status:** **v2.0.0** — physical engine (**Matilda Piano 2**). M1–M2c (v1 sampler + GUI) complete. See `docs/MILESTONES.md`.
 
 ---
 
@@ -43,15 +43,15 @@
    ```
 
 3. **Verify installation**
-   - AU: `ls ~/Library/Audio/Plug-Ins/Components/Matilda\ Piano.component`
-   - Standalone: `build/MatildaPiano_artefacts/Release/Matilda Piano.app`
+   - AU: `ls ~/Library/Audio/Plug-Ins/Components/Matilda\ Piano\ 2.component`
+   - Standalone: `build/MatildaPiano_artefacts/Release/Matilda Piano 2.app` (or under `Release/Standalone/`, depending on JUCE)
    - Unit tests: `./build/MatildaPianoTests_artefacts/Release/MatildaPianoTests` (see `docs/testing.md`).
 
 4. **Run Standalone (fast UI testing without a DAW)**
    ```bash
-   open build/MatildaPiano_artefacts/Release/Matilda\ Piano.app
+   open build/MatildaPiano_artefacts/Release/Matilda\ Piano\ 2.app
    ```
-   Or from Xcode/VS Code: run the "Matilda Piano - Standalone" target.
+   Or from Xcode/VS Code: run the **MatildaPiano — Standalone** target.
 
 ### Build errors: `'algorithm' file not found` or `Failed to build juceaide`
 
@@ -92,30 +92,22 @@ The plugin can load `background.png` either:
 
 If you’re using the Figma MCP inside Cursor, export or screenshot your UI frame and save it as `background.png` using one of the two paths above.
 
-## Adding Piano Samples
+## Piano samples
 
-Sample loading looks in:
-- `~/Music/MatildaPiano/Samples`
-- `~/Documents/MatildaPiano/Samples`
-
-**Duration per note:** **3–8 seconds** recommended; plugin uses up to **30 seconds** per sample. The on-screen keyboard is **7 octaves** (C1–C8) per PRD.
-
-Place WAV/AIFF files there. Supported naming:
-- Note names: `Piano_C4.wav`, `Piano_F#3_take1.aif`, `Piano_Bb2.wav`
-- MIDI note numbers: `Piano_60.wav`
+**v2 does not use sample files.** For the legacy WAV workflow see **`version-1/README.md`**.
 
 ## Testing in GarageBand
 
 1. Open GarageBand
 2. Create Software Instrument track
-3. Click instrument slot → Audio Units → Matilda Piano
+3. Click instrument slot → Audio Units → **Matilda Piano 2** (v1 remains **Matilda Piano** if still installed)
 4. Play MIDI notes to test
 
 ## Troubleshooting
 
 **Plugin doesn't appear in GarageBand:**
 - Check: `auval -a | grep Matilda`
-- Verify: `~/Library/Audio/Plug-Ins/Components/MatildaPiano.component` exists
+- Verify: `~/Library/Audio/Plug-Ins/Components/Matilda Piano 2.component` exists
 - Restart GarageBand
 
 **Build errors:**

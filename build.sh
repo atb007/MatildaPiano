@@ -41,9 +41,9 @@ cmake --build build --config Release
 
 echo ""
 echo "Build complete! Plugin installed to:"
-echo "  ~/Library/Audio/Plug-Ins/Components/MatildaPiano.component"
+echo "  ~/Library/Audio/Plug-Ins/Components/Matilda Piano 2.component"
 echo ""
 echo "To test in GarageBand:"
 echo "  1. Open GarageBand"
 echo "  2. Create a Software Instrument track"
-echo "  3. Select 'Matilda Piano' from the Audio Units list"
+echo "  3. Select 'Matilda Piano 2' from the Audio Units list (v1 is 'Matilda Piano')"

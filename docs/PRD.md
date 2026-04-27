@@ -1,10 +1,10 @@
 # Product Requirements Document (PRD) — Matilda Piano
 
-**Version:** 1.0 (first version)  
+**Version:** 2.0 (PRD addendum for physical engine)  
 **Status:** Draft  
-**Last updated:** 2026-02-26
+**Last updated:** 2026-04-24
 
-**Milestone:** **M1** complete (frozen). **M2a** GUI alignment complete. **M2b** fonts fixed. **M2c** effect module + delay Off + XY enabled (2026-02-27). See `docs/MILESTONES.md`.
+**Milestone:** **M1–M2c** (v1 sampler + GUI) complete. **M3 / v2.0.0** — physical string engine; product **Matilda Piano 2** (side-by-side AU). See `docs/MILESTONES.md`.
 
 ---
 
@@ -12,7 +12,8 @@
 
 ### 1.1 Name and tagline
 
-- **Product name:** Matilda Piano  
+- **Product name (v2):** **Matilda Piano 2** (AU display name; distinct plugin code from v1).  
+- **Product name (v1):** Matilda Piano (sampler).  
 - **Tagline:** A beautiful, responsive piano instrument with tape character and simple effects.
 
 ### 1.2 Vision
@@ -39,15 +40,20 @@ Matilda Piano is a **software instrument (synth)** that provides a playable pian
 
 ### 2.1 Instrument engine
 
-- **Piano sound:** One main acoustic piano, driven by **sampled audio** (no physical modelling in v1).
-- **Sample source:** **Open-source or user-provided** sample libraries only; no bundled commercial samples. Samples are **not** embedded in the binary; they are loaded from user-configurable folders at runtime.
-- **Sample loading rules:**
-  - Search paths: `~/Music/MatildaPiano/Samples`, then `~/Documents/MatildaPiano/Samples`.
-  - Formats: WAV, AIFF.
-  - Filename parsing: note names (e.g. `C4`, `F#3`, `Bb2`) or MIDI note numbers (e.g. `60`). Unparseable files are mapped across all notes as a fallback.
-- **Depth (v1):** Simple — 1–2 velocity layers per note, no round-robins, **no sustain-pedal support**.
-- **Polyphony:** Fixed cap (e.g. 32 voices); voice stealing when exceeded.
-- **Memory model:** Samples **preloaded into RAM** (no disk streaming in v1).
+**v2.0 (current product — Matilda Piano 2)**
+
+- **Piano sound:** One main **physically inspired** tone: **Karplus–Strong / waveguide-style** string loop per voice with noise excitation (hammer) and velocity-sensitive level. **No sample files**; no disk scanning for WAV/AIFF in the core engine.
+- **Pitch:** Equal temperament (A4 = 440 Hz); pitch wheel ±2 semitones (same JUCE convention as v1 voices).
+- **Envelope:** Same **ADSR** parameters and ranges as v1 — applied as a **gain envelope on the physical voice output** so knob behaviour matches the previous release.
+- **Polyphony:** 32 voices; voice stealing when exceeded.
+- **Memory:** Per-voice delay buffers allocated in `prepareToPlay()` only (not per audio block).
+
+**v1.0 (historical — sampler)**
+
+- **Piano sound:** Driven by **sampled audio** from `keySamples` or user folders (see `version-1/` and `docs/architecture.md` historical section).
+- **Sample source:** User-provided WAV/AIFF; loaded at init only.
+- **Depth:** Simple velocity via sample playback; no sustain pedal in v1.
+- **Polyphony / RAM:** Same 32-voice cap; samples in RAM.
 
 ### 2.2 Envelope and tone shaping
 
@@ -76,7 +82,7 @@ Matilda Piano is a **software instrument (synth)** that provides a playable pian
   - ADSR row (white chicken-head knobs).
   - FX row: Reverb, Delay (with live subdivision label), Master vol. (green chicken-head knobs).
   - XY pad for tape/flutter.
-  - On-screen piano keyboard at bottom for click-to-play and visual feedback. **Keyboard range:** **C0–C7** (MIDI 12–96). Sampled range 7 octaves (C1–C8 in mapping; keys shown C0–C7).
+  - On-screen piano keyboard at bottom for click-to-play and visual feedback. **Keyboard range:** **C0–C7** (MIDI 12–96). **v2:** engine responds to full MIDI note range 0–127 from the host; display unchanged.
 - **Background art:** Loaded from embedded BinaryData (if `Assets/` has PNGs at build time) or from disk at `~/Documents/MatildaPiano/Assets/background.png` for quick iteration without rebuild.
 
 ### 2.5 Parameter mapping and automation
@@ -111,22 +117,28 @@ Matilda Piano is a **software instrument (synth)** that provides a playable pian
 
 - **Processor:** Single `AudioProcessor` subclass; owns synthesiser, DSP chain (Tape → Delay → Reverb → Gain), and parameter state.
 - **Threading:** Audio thread (processBlock only; no alloc/I/O/locks); UI thread for painting and controls.
-- **Voice management:** Fixed number of `MatildaSamplerVoice` instances; JUCE `Synthesiser` handles note allocation and stealing.
-- **File scanning:** Sample load at **initialization only** (e.g. constructor or first prepare); never on the audio thread.
-- **Error handling (v1):** Missing/invalid samples: plugin loads, no sound; failed files skipped. Optional: status message for “no samples found” in a later iteration.
+- **Voice management:** Fixed number of `MatildaPhysicalVoice` instances (v2); JUCE `Synthesiser` handles note allocation and stealing.
+- **File scanning (v2):** None for the core instrument. Optional `keySamples` copy in CMake is legacy / harmless for Standalone.
+- **Error handling (v2):** Engine always registers one `MatildaPhysicalSound`; status line usually empty.
 - **Performance:** Real-time safe audio path; reverb uses preallocated wet buffer; delay time updated per block (can be optimized with cached subdivision/BPM).
 
 Detailed notes: `docs/architecture.md`.
 
 ---
 
-## 5. Success criteria (v1)
+## 5. Success criteria
 
-- Builds as **AU** and **Standalone** on macOS from CMake.
-- Loads in **GarageBand** and plays MIDI notes when samples are present in the configured folders.
-- All controls (ADSR, Reverb, Delay, Master, XY) affect sound as specified; delay label reflects current subdivision (including "Off" at minimum). Effect chain (tape, delay, reverb) and XY pad are enabled by default.
-- UI matches Figma layout (1074×483); all labels and branding rendered by JUCE.
-- No crashes or audio dropouts under normal use (e.g. 32-voice polyphony, typical buffer sizes).
+**v2.0**
+
+- Builds as **AU** and **Standalone** on macOS; installs as **Matilda Piano 2** without replacing v1.
+- Loads in **GarageBand** and plays MIDI **without** sample folders.
+- All controls (ADSR, Reverb, Delay, Master, XY) behave as in v1 (same parameter IDs and mapping).
+- UI unchanged (Figma 1074×483).
+- No crashes or audio dropouts under normal use (32-voice polyphony, typical buffer sizes).
+
+**v1.0 (historical)**
+
+- Plays when samples are present in configured folders; see archived milestone notes.
 
 ---
 
@@ -147,3 +159,4 @@ Detailed notes: `docs/architecture.md`.
 | 1.0     | 2026-02-26 | §2.4: Keyboard range C0–C7 (MIDI 12–96); 7 octaves sampled (C1–C8 in mapping). |
 | 1.0     | 2026-02-26 | **Milestone 1:** Functionality frozen. Next: GUI fixes (see `docs/MILESTONES.md`). |
 | 1.0     | 2026-02-27 | **M2c:** Effect module (tape, delay, reverb) and XY pad enabled; delay lowest position = Off. |
+| 2.0     | 2026-04-24 | **M3:** Physical string engine; **Matilda Piano 2**; `PLUGIN_CODE` MtP2; side-by-side with v1. |

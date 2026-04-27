@@ -19,14 +19,10 @@ MatildaPianoAudioProcessor::MatildaPianoAudioProcessor()
 #endif
     , valueTreeState(*this, nullptr, "PARAMETERS", Parameters::createParameterLayout())
 {
-    // Add voices to synthesiser
     for (int i = 0; i < numVoices; ++i)
-    {
-        synth.addVoice(new MatildaSamplerVoice());
-    }
-    
-    // Load samples (will be implemented to load from Samples/ directory)
-    loadSamples();
+        synth.addVoice(new MatildaPhysicalVoice());
+
+    setupPhysicalEngine();
 }
 
 MatildaPianoAudioProcessor::~MatildaPianoAudioProcessor()
@@ -106,10 +102,8 @@ void MatildaPianoAudioProcessor::prepareToPlay(double sampleRate, int samplesPer
     synth.setCurrentPlaybackSampleRate(sampleRate);
     // Set ADSR sample rate on our voices so envelope timing is correct (was causing sharp burst then silence)
     for (int i = 0; i < synth.getNumVoices(); ++i)
-    {
-        if (auto* v = dynamic_cast<MatildaSamplerVoice*>(synth.getVoice(i)))
+        if (auto* v = dynamic_cast<MatildaPhysicalVoice*>(synth.getVoice(i)))
             v->setSampleRate(sampleRate);
-    }
 
     // Prepare DSP modules
     tapeModule.prepare(spec);
@@ -124,10 +118,8 @@ void MatildaPianoAudioProcessor::prepareToPlay(double sampleRate, int samplesPer
 
 void MatildaPianoAudioProcessor::releaseResources()
 {
-    // Do NOT clear synth sounds here — the host/standalone may call this when
-    // reconfiguring audio (e.g. opening device settings), which would remove
-    // all loaded samples and cause "meter moves but no sound". Samples are
-    // only cleared in loadSamples() when reloading.
+    // Do not clear synth sounds here — the host may call this when reconfiguring
+    // audio; the physical engine sound is re-registered only from setupPhysicalEngine().
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -246,233 +238,11 @@ void MatildaPianoAudioProcessor::setStateInformation(const void* data, int sizeI
     }
 }
 
-void MatildaPianoAudioProcessor::loadSamples()
+void MatildaPianoAudioProcessor::setupPhysicalEngine()
 {
-    // Clear existing sounds
     synth.clearSounds();
     sampleLoadStatus_.clear();
-
-    // Search order:
-    // 1) keySamples — bundled (Contents/Resources/keySamples) or next to the .app
-    //    Naming: note + octave 0–7, e.g. c0.wav, c#5.wav (c0 = C1 = MIDI 24; c7 = C8 = MIDI 108). PRD: 7 octaves.
-    // 2) ~/Music/MatildaPiano/Samples
-    // 3) ~/Documents/MatildaPiano/Samples
-    //    Naming: note name (e.g. Piano_C4.wav) or MIDI number (e.g. Piano_60.wav)
-    juce::File samplesDir;
-    bool useKeySamplesNaming = false;
-
-    auto appFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
-    juce::File keySamplesInBundle = appFile.getChildFile("Contents/Resources/keySamples");
-    juce::File keySamplesNextToApp = appFile.getParentDirectory().getChildFile("keySamples");
-    if (keySamplesInBundle.isDirectory())
-        samplesDir = keySamplesInBundle;
-    else if (keySamplesNextToApp.isDirectory())
-        samplesDir = keySamplesNextToApp;
-    if (samplesDir.exists())
-        useKeySamplesNaming = true;
-
-    if (!samplesDir.isDirectory())
-    {
-        samplesDir = juce::File::getSpecialLocation(juce::File::userMusicDirectory)
-                         .getChildFile("MatildaPiano")
-                         .getChildFile("Samples");
-        if (!samplesDir.isDirectory())
-        {
-            samplesDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-                             .getChildFile("MatildaPiano")
-                             .getChildFile("Samples");
-        }
-    }
-
-    if (!samplesDir.isDirectory())
-    {
-        sampleLoadStatus_ = "No samples found — add keySamples folder or WAV/AIFF to ~/Music/MatildaPiano/Samples or ~/Documents/MatildaPiano/Samples";
-        return;
-    }
-
-    juce::AudioFormatManager formatManager;
-    formatManager.registerBasicFormats();
-
-    // Parser for keySamples naming: lowercase note + optional # + octave 0–7 (e.g. c0, c#5).
-    // Octave 0 = C1 = MIDI 24; octave 7 = C8 = MIDI 108. PRD: 7 octaves (C1–C8).
-    auto keySamplesStemToMidi = [](const juce::String& stem) -> int
-    {
-        if (stem.isEmpty()) return -1;
-        juce::String s = stem.toLowerCase().trim();
-        int i = 0;
-        auto letter = s[0];
-        int base = -1;
-        switch (letter)
-        {
-            case 'c': base = 0; break;
-            case 'd': base = 2; break;
-            case 'e': base = 4; break;
-            case 'f': base = 5; break;
-            case 'g': base = 7; break;
-            case 'a': base = 9; break;
-            case 'b': base = 11; break;
-            default: return -1;
-        }
-        i = 1;
-        if (i < s.length() && s[i] == '#') { base += 1; i++; }
-        if (i >= s.length() || !juce::CharacterFunctions::isDigit(s[i])) return -1;
-        int octave = 0;
-        while (i < s.length() && juce::CharacterFunctions::isDigit(s[i]))
-        {
-            octave = octave * 10 + (s[i] - '0');
-            i++;
-        }
-        if (octave < 0 || octave > 7) return -1;
-        int midi = 24 + octave * 12 + base;
-        return (midi >= 0 && midi <= 127) ? midi : -1;
-    };
-
-    auto noteNameToMidi = [](juce::String noteName) -> int
-    {
-        noteName = noteName.toUpperCase().retainCharacters("ABCDEFG#B0123456789-");
-        if (noteName.isEmpty())
-            return -1;
-
-        const juce::String letters = "CDEFGAB";
-        auto letter = noteName[0];
-        int base = -1;
-        switch (letter)
-        {
-            case 'C': base = 0; break;
-            case 'D': base = 2; break;
-            case 'E': base = 4; break;
-            case 'F': base = 5; break;
-            case 'G': base = 7; break;
-            case 'A': base = 9; break;
-            case 'B': base = 11; break;
-            default: return -1;
-        }
-
-        int idx = 1;
-        int accidental = 0;
-        if (idx < noteName.length() && (noteName[idx] == '#' || noteName[idx] == 'B'))
-        {
-            accidental = (noteName[idx] == '#') ? 1 : -1;
-            ++idx;
-        }
-
-        auto octaveStr = noteName.substring(idx).trim();
-        if (octaveStr.isEmpty() || !octaveStr.containsOnly("0123456789-"))
-            return -1;
-
-        const int octave = octaveStr.getIntValue();
-        const int midi = (octave + 1) * 12 + base + accidental; // MIDI 60 = C4
-        return (midi >= 0 && midi <= 127) ? midi : -1;
-    };
-
-    auto parseMidiNoteFromName = [&](const juce::String& fileStem) -> int
-    {
-        // 1) Look for note names like C4, F#3, Bb2 (we treat 'b' as 'B' in uppercase pass above)
-        for (int i = 0; i < fileStem.length() - 1; ++i)
-        {
-            auto c = juce::CharacterFunctions::toUpperCase(fileStem[i]);
-            if (c < 'A' || c > 'G')
-                continue;
-
-            // Build candidate: letter + optional #/b + octave (at least 1 digit, maybe -1)
-            juce::String cand;
-            cand << c;
-
-            int j = i + 1;
-            if (j < fileStem.length())
-            {
-                auto acc = fileStem[j];
-                if (acc == '#' || acc == 'b' || acc == 'B')
-                {
-                    cand << acc;
-                    ++j;
-                }
-            }
-
-            if (j >= fileStem.length())
-                continue;
-
-            // Octave: optional '-' then digits
-            int k = j;
-            if (fileStem[k] == '-')
-                ++k;
-
-            int digitStart = k;
-            while (k < fileStem.length() && juce::CharacterFunctions::isDigit(fileStem[k]))
-                ++k;
-
-            if (k == digitStart)
-                continue;
-
-            cand << fileStem.substring(j, k);
-            if (auto midi = noteNameToMidi(cand); midi != -1)
-                return midi;
-        }
-
-        // 2) Look for a MIDI note number token 0..127
-        for (int i = 0; i < fileStem.length(); ++i)
-        {
-            if (!juce::CharacterFunctions::isDigit(fileStem[i]))
-                continue;
-
-            int j = i;
-            while (j < fileStem.length() && juce::CharacterFunctions::isDigit(fileStem[j]))
-                ++j;
-
-            auto token = fileStem.substring(i, j);
-            const int midi = token.getIntValue();
-            if (midi >= 0 && midi <= 127)
-                return midi;
-
-            i = j;
-        }
-
-        return -1;
-    };
-
-    juce::Array<juce::File> files;
-    samplesDir.findChildFiles(files, juce::File::findFiles, true, "*.wav;*.wave;*.aif;*.aiff");
-    if (files.isEmpty())
-    {
-        sampleLoadStatus_ = "No samples found — add WAV/AIFF to " + samplesDir.getFullPathName();
-        return;
-    }
-
-    for (const auto& f : files)
-    {
-        std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(f));
-        if (!reader)
-            continue;
-
-        auto fileStem = f.getFileNameWithoutExtension();
-        int midi = -1;
-        if (useKeySamplesNaming)
-            midi = keySamplesStemToMidi(fileStem);
-        if (midi == -1)
-            midi = parseMidiNoteFromName(fileStem);
-
-        juce::BigInteger notes;
-        if (midi != -1)
-            notes.setBit(midi);
-        else
-            notes.setRange(0, 128, true); // fallback
-
-        // Small attack (3 ms) to avoid clicks/glitches on note start (e.g. F3/G3 transients)
-        const double sampleAttackSecs = 0.003;
-        auto sound = std::make_unique<MatildaSamplerSound>(
-            f.getFileNameWithoutExtension(),
-            *reader,
-            notes,
-            midi != -1 ? midi : 60,
-            sampleAttackSecs,
-            0.1,
-            30.0
-        );
-
-        synth.addSound(sound.release());
-    }
-    // Clear status when at least one sound was loaded
-    sampleLoadStatus_.clear();
+    synth.addSound(new MatildaPhysicalSound());
 }
 
 void MatildaPianoAudioProcessor::updateParameters()
@@ -485,7 +255,7 @@ void MatildaPianoAudioProcessor::updateParameters()
     
     for (int i = 0; i < synth.getNumVoices(); ++i)
     {
-        if (auto* voice = dynamic_cast<MatildaSamplerVoice*>(synth.getVoice(i)))
+        if (auto* voice = dynamic_cast<MatildaPhysicalVoice*>(synth.getVoice(i)))
         {
             voice->setAttack(attack);
             voice->setDecay(decay);

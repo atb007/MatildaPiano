@@ -74,3 +74,20 @@ Track major project phases. Update this file when a milestone is completed or a 
 | 2026-02-27 | M2b fonts: bundle Resources + flat/nested paths; BinaryData glob; deprecation fix. |
 | 2026-02-27 | M2c: Effect module enabled (bypass=0); delay Off at minimum; XY pad effects active. |
 | 2026-02-27 | **v1.0.0** tagged — milestone release; polyphony fix, delay/XY improvements; push to GitHub. |
+| 2026-04-24 | **M3 / v2.0.0:** Physical string engine (`MatildaPhysicalVoice` / `MatildaPhysicalSound`); product **Matilda Piano 2** (`PLUGIN_CODE` MtP2); branch `v2-physical-model`. |
+
+---
+
+## Milestone 3: Physical engine (v2.0.0) — 2026-04-24
+
+**Status:** In progress / initial release
+
+**Scope:** Replace sample-based piano with a real-time **Karplus–Strong–style** string model; keep **same UI and parameter behaviour** (ADSR, tape XY, delay, reverb, master). Install **side-by-side** with v1 via new plugin code and bundle ID.
+
+**Delivered (initial):**
+- **Engine:** `MatildaPhysicalVoice` / `MatildaPhysicalSound`; `setupPhysicalEngine()` registers one sound for MIDI 0–127; no `loadSamples()` / WAV dependency.
+- **Processor / FX:** Unchanged routing: synth → polyphony gain → tape → delay → reverb → master (see `PluginProcessor.cpp`).
+- **Build:** `VERSION` / `project()` **2.0.0**; `PLUGIN_CODE` **MtP2**; `PRODUCT_NAME` **Matilda Piano 2**; bundle ID `com.matildaaudio.matildapiano2`.
+- **Docs / git:** `docs/architecture.md`, `README.md`, `PRD.md`, `CHANGELOG.md`, `DEV-HANDOFF.md` updated; development branch **`v2-physical-model`**.
+
+**References:** `docs/architecture.md`, `_bmad-output/planning-artifacts/research/technical-synth-pads-physical-modeling-piano-research-2026-02-28.md`.

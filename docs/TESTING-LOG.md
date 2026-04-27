@@ -4,7 +4,9 @@ Record observations from testing the **Standalone** app (and optionally the AU i
 
 **Related:** Unit tests (build/run) → **`docs/testing.md`**.
 
-**Milestone:** **M1** complete (frozen). **M2a** + **M2b** + **M2c** complete (GUI, fonts, effect module + delay Off + XY enabled). See `docs/MILESTONES.md`.
+**Milestone:** **M1** complete (frozen). **M2a** + **M2b** + **M2c** complete (GUI, fonts, effect module + delay Off + XY enabled). **M3 / v2.0.0** — physical engine (**Matilda Piano 2**). See `docs/MILESTONES.md`.
+
+**v2 note:** **Matilda Piano 2** does **not** need WAV samples. If you have no sound, start at **output device** and **master volume**, then buffer size — not sample folders. Sample-related steps below are for **v1** / historical sessions.
 
 ---
 
@@ -12,16 +14,20 @@ Record observations from testing the **Standalone** app (and optionally the AU i
 
 Use this when testing with the **on-screen keyboard (mouse clicks)** and you hear no sound:
 
-1. **Samples present**  
+1. **v2 — Physical engine (no samples)**  
+   - **Matilda Piano 2** should play immediately after a successful build. Confirm you opened **Matilda Piano 2** Standalone or AU (not an old v1 app without rebuilding).
+
+1b. **v1 — Samples present**  
    - **keySamples (preferred):** If the project has a `keySamples/` folder (e.g. `c0.wav`, `c#5.wav` — see [Where the plugin looks](#where-the-plugin-looks-for-samples)), the build copies it into the Standalone app bundle. All **7 octaves** (C1–C8, MIDI 24–108) per PRD should then play.  
    - **User folders:** Otherwise the plugin uses `~/Documents/MatildaPiano/Samples` or `~/Music/MatildaPiano/Samples` (e.g. run `./scripts/fetch-piano-samples.sh` for one octave only).
 
 2. **Rebuild and full restart**  
-   - Run `./build.sh`, then **quit the Standalone app completely** and launch it again. Samples load **only at startup**; the app does not reload samples until the next launch. After changing `keySamples/`, you must rebuild so the new files are copied into the app bundle, then **fully quit and relaunch** the Standalone (preferably from the build output: `build/MatildaPiano_artefacts/Release/Standalone/Matilda Piano.app`).
+   - Run `./build.sh`, then **quit the Standalone app completely** and launch it again. **v1:** samples load only at startup. **v2:** launch the new **Matilda Piano 2.app** from `build/MatildaPiano_artefacts/Release/` (or the `Standalone` subfolder if present).
 
-3. **Click keys that have samples**  
-   - If using **keySamples** (full set): keys **C1–C7** have samples and play; **C0** is shown but has no samples by default. Keyboard ends at C7.  
-   - If using **user folder** (fetch script): only **C4–B4** (middle octave) has files — click keys in that octave.
+3. **Click keys that have samples (v1)** / **any key (v2)**  
+   - **v2:** try **C4** and several other keys — engine covers MIDI 0–127.  
+   - **v1 keySamples:** keys **C1–C7** have samples; **C0** shown but none by default.  
+   - **v1 user folder** (fetch script): only **C4–B4** — click in that octave.
 
 4. **Output device**  
    - In the Standalone app: **Audio** or **Options → Audio** → set **output** to the device you’re listening on (e.g. built-in output or your interface).

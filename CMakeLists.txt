@@ -12,7 +12,7 @@ if(DEFINED JUCE_DIR AND JUCE_DIR AND NOT EXISTS "${JUCE_DIR}/JUCEConfig.cmake")
 endif()
 
 # C and CXX: JUCE subprojects may use C, so both are required (fixes CMAKE_C_COMPILE_OBJECT missing).
-project(MatildaPiano VERSION 1.0.0 LANGUAGES C CXX)
+project(MatildaPiano VERSION 2.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,11 +32,11 @@ endif()
 juce_add_plugin(MatildaPiano
     COMPANY_NAME "MatildaAudio"
     PLUGIN_MANUFACTURER_CODE MatA
-    PLUGIN_CODE MatP
+    PLUGIN_CODE MtP2
     FORMATS AU Standalone
-    PRODUCT_NAME "Matilda Piano"
-    DESCRIPTION "A beautiful piano VST plugin"
-    VERSION 1.0.0
+    PRODUCT_NAME "Matilda Piano 2"
+    DESCRIPTION "Matilda Piano — physical string model (v2)"
+    VERSION 2.0.0
     PLUGIN_MANUFACTURER "Matilda Audio"
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
@@ -54,8 +54,8 @@ target_sources(MatildaPiano PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Parameters.cpp
-    Source/MatildaSamplerVoice.cpp
-    Source/MatildaSamplerSound.cpp
+    Source/MatildaPhysicalVoice.cpp
+    Source/MatildaPhysicalSound.cpp
     Source/TapeModule.cpp
     Source/DelayModule.cpp
     Source/ReverbModule.cpp
@@ -69,8 +69,8 @@ target_sources(MatildaPiano PRIVATE
     Source/PluginProcessor.h
     Source/PluginEditor.h
     Source/Parameters.h
-    Source/MatildaSamplerVoice.h
-    Source/MatildaSamplerSound.h
+    Source/MatildaPhysicalVoice.h
+    Source/MatildaPhysicalSound.h
     Source/TapeModule.h
     Source/DelayModule.h
     Source/ReverbModule.h
@@ -121,8 +121,8 @@ endif()
 if(APPLE)
     set_target_properties(MatildaPiano PROPERTIES
         OSX_ARCHITECTURES "arm64;x86_64"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.matildaaudio.matildapiano"
-        MACOSX_BUNDLE_BUNDLE_NAME "Matilda Piano"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.matildaaudio.matildapiano2"
+        MACOSX_BUNDLE_BUNDLE_NAME "Matilda Piano 2"
     )
     
     # Set minimum macOS version
@@ -130,7 +130,7 @@ if(APPLE)
         OSX_DEPLOYMENT_TARGET "12.0"
     )
     
-    # Copy keySamples into Standalone app bundle (plugin also looks for keySamples next to the .app)
+    # Optional: copy keySamples for v1-style workflows / A-B; v2 engine does not require WAVs.
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/keySamples")
         add_custom_command(TARGET MatildaPiano_Standalone POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -160,8 +160,8 @@ target_sources(MatildaPianoTests PRIVATE
     Source/Parameters.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
-    Source/MatildaSamplerVoice.cpp
-    Source/MatildaSamplerSound.cpp
+    Source/MatildaPhysicalVoice.cpp
+    Source/MatildaPhysicalSound.cpp
     Source/TapeModule.cpp
     Source/DelayModule.cpp
     Source/ReverbModule.cpp
@@ -174,7 +174,7 @@ target_include_directories(MatildaPianoTests PRIVATE
 )
 target_compile_definitions(MatildaPianoTests PRIVATE
     MATILDA_HAS_BINARY_DATA=0
-    JucePlugin_Name="Matilda Piano"
+    JucePlugin_Name="Matilda Piano 2"
     JucePlugin_IsMidiEffect=0
     JucePlugin_IsSynth=1
     JucePlugin_WantsMidiInput=1

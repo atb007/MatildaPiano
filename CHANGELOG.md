@@ -2,6 +2,24 @@
 
 All notable changes to Matilda Piano are documented here.
 
+## [2.0.0] - 2026-04-24
+
+### Matilda Piano 2 — physical string model
+
+Major version: **sample-based engine replaced** by a **Karplus–Strong–style** string voice (`MatildaPhysicalVoice`) and full-range `MatildaPhysicalSound`. **UI, parameters, and effect chain behaviour are unchanged** from v1 so projects and muscle memory transfer cleanly.
+
+### Added
+- **Physical engine:** Per-voice delay-line string with noise excitation; pitch wheel; velocity-sensitive hammer level; note-dependent loop damping for brighter high notes vs warmer lows.
+- **Side-by-side installs:** New **four-character** AU code **`MtP2`**, product name **Matilda Piano 2**, bundle ID **`com.matildaaudio.matildapiano2`**, CMake **`VERSION` 2.0.0**.
+
+### Removed
+- **`MatildaSamplerVoice` / `MatildaSamplerSound`** and **`loadSamples()`** from the main `Source/` tree (v1 snapshot remains under **`version-1/`** and tag **`v1.0.0`**).
+
+### Documentation
+- README, PRD, architecture, milestones, dev handoff updated for v2.
+
+---
+
 ## [1.0.0] - 2026-02-27
 
 ### Milestone release — Matilda Piano v1.0
@@ -25,4 +43,5 @@ First versioned release. Core piano plugin with Figma-aligned UI, full effect ch
 
 ---
 
+[2.0.0]: https://github.com/atb007/MatildaPiano/releases/tag/v2.0.0
 [1.0.0]: https://github.com/atb007/MatildaPiano/releases/tag/v1.0.0

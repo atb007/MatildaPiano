@@ -1,14 +1,20 @@
 # Matilda Piano VST Plugin
 
-A beautiful piano VST plugin built with JUCE, featuring a custom UI design and professional DSP effects.
+<img width="1074" height="483" alt="Piano Frame" src="https://github.com/user-attachments/assets/f1f91ab5-2b36-41af-a9da-d5a9d52389c8" />
 
-**Version:** **v1.0.0** (2026-02-27). See **`CHANGELOG.md`** and **`docs/MILESTONES.md`**.
+A beautiful piano AU plugin built with JUCE, featuring a custom UI design and professional DSP effects.
+
+**Version:** **v2.0.0** (physical string model). **v1.0.0** (sampler) remains available via git tag `v1.0.0` and the `version-1/` tree. See **`CHANGELOG.md`** and **`docs/MILESTONES.md`**.
+
+**Side-by-side with v1:** This build installs as **Matilda Piano 2** (new `PLUGIN_CODE` **MtP2**, bundle ID `com.matildaaudio.matildapiano2`) so it does not replace **Matilda Piano** v1 in your DAW.
 
 **Designers / first-time build:** See **[BUILD-SIMPLE.md](BUILD-SIMPLE.md)** for simple steps and the **full clean + build** script (`./clean-and-build.sh`) when you get errors.
 
+**New to the project?** See **[docs/PROJECT-GUIDE-NOOB-FRIENDLY.md](docs/PROJECT-GUIDE-NOOB-FRIENDLY.md)** for a noob-friendly guide: why we use this tech stack, how components work together, why CMake and the folder layout matter, and critical errors we fixed.
+
 ## Features
 
-- **Piano Sampler**: High-quality piano samples with velocity-sensitive playback
+- **Physical piano engine (v2):** Karplus–Strong–style string synthesis per voice — no WAV sample packs required; velocity-sensitive excitation
 - **ADSR Envelope**: Full control over Attack, Decay, Sustain, and Release
 - **Effects Chain**:
   - Tape/Flutter effect controlled by XY pad
@@ -16,7 +22,7 @@ A beautiful piano VST plugin built with JUCE, featuring a custom UI design and p
   - Reverb for spatial depth
   - Master volume control
 - **Custom UI**: Beautiful interface matching Figma design
-- **macOS AU Plugin**: Compatible with GarageBand and other AU hosts
+- **macOS AU Plugin**: **Matilda Piano 2** — compatible with GarageBand and other AU hosts alongside v1
 
 ## Project Structure
 
@@ -30,7 +36,7 @@ MatildaPiano/
 │   ├── PluginProcessor.*  # Main audio processor (APVTS, synth, keyboard state, DSP chain)
 │   ├── PluginEditor.*     # UI editor
 │   ├── Parameters.*       # Parameter definitions
-│   ├── MatildaSampler*    # Sampler engine
+│   ├── MatildaPhysical*   # Physical string engine (voices + sound)
 │   ├── TapeModule.*       # Tape/flutter DSP
 │   ├── DelayModule.*      # Delay effect
 │   ├── ReverbModule.*     # Reverb effect
@@ -67,7 +73,7 @@ export JUCE_DIR='/path/to/JUCE'   # or '/path/to/JUCE 2' for source
 
 For a **full clean** (e.g. after errors), use **`./clean-and-build.sh`** (edit the `JUCE_PATH` inside the script if needed). See **[BUILD-SIMPLE.md](BUILD-SIMPLE.md)** for step-by-step and troubleshooting.
 
-`./build.sh` configures (if needed) and builds the plugin and the test target. The AU is copied to `~/Library/Audio/Plug-Ins/Components/Matilda Piano.component`. To build again without reconfiguring: `cmake --build build --config Release`.
+`./build.sh` configures (if needed) and builds the plugin and the test target. The AU is copied to `~/Library/Audio/Plug-Ins/Components/Matilda Piano 2.component`. To build again without reconfiguring: `cmake --build build --config Release`.
 
 ### 3. Using VS Code
 
@@ -90,16 +96,16 @@ For a **full clean** (e.g. after errors), use **`./clean-and-build.sh`** (edit t
 
 4. The assets will be embedded in the plugin binary and accessible via `BinaryData::background_png`, etc.
 
-## Adding Piano Samples
+## Samples (v1 only)
 
-**Preferred: use the project’s `keySamples` folder.**  
-Place WAV files named by note + octave 0–7 (e.g. `c0.wav`, `c#5.wav`). Octave 0 = first octave (MIDI 24). The plugin looks for `keySamples` inside the Standalone app bundle (copied at build) or next to the .app. See `docs/architecture.md` and `docs/TESTING-LOG.md` for full rules.
+**v2 does not use sample files.** The instrument is generated in real time. For the historical sample-based workflow (v1 / `version-1/`), see **`version-1/README.md`**, `docs/TESTING-LOG.md`, and `docs/architecture.md` (historical section).
 
-**Alternatively**, place piano samples in one of `~/Music/MatildaPiano/Samples` or `~/Documents/MatildaPiano/Samples` (see naming rules in `docs/TESTING-LOG.md`).
+## Smooth play and low latency
 
-1. **Sample duration:** Use **3–8 seconds per note** for natural decay; the plugin uses up to **30 seconds** per sample. One sample per note; the on-screen keyboard is **7 octaves** (C1–C8) per PRD.
-2. **Naming (user folders):** Include a note name (e.g. `C4`, `F#3`) or MIDI number (e.g. `60`) in the filename. See `docs/architecture.md` and `docs/TESTING-LOG.md` (Troubleshooting: Sound).
-3. If no samples are found, the plugin shows a status message in the UI (e.g. “No samples found — add keySamples or WAV/AIFF to …”).
+For the most responsive, glitch-free feel (e.g. dragging the mouse across the keys):
+
+- **Use a small buffer size** in your host or DAW. Set the audio device buffer to **128 samples** (or 64 if your system handles it without dropouts). In GarageBand: choose **GarageBand → Settings → Audio/MIDI** and pick a smaller buffer (e.g. 128). Lower buffer = less input-to-sound delay and smoother continuous note triggering.
+- The plugin reports **0 samples latency**; the main variable is the host buffer. Keeping the buffer at 128 (or 64) gives a smooth, lag-free experience similar to built-in instruments.
 
 ## Testing in GarageBand
 
@@ -109,7 +115,7 @@ Place WAV files named by note + octave 0–7 (e.g. `c0.wav`, `c#5.wav`). Octave 
 
 3. Create a new Software Instrument track
 
-4. Click on the instrument slot and look for "Matilda Piano" in the Audio Units list
+4. Click on the instrument slot and look for **"Matilda Piano 2"** in the Audio Units list (v1 appears as **"Matilda Piano"**)
 
 5. If the plugin doesn't appear:
    - Check that it's in `~/Library/Audio/Plug-Ins/Components/`
@@ -141,7 +147,7 @@ Place WAV files named by note + octave 0–7 (e.g. `c0.wav`, `c#5.wav`). Octave 
   cmake --build build --target MatildaPianoTests --config Release
   ./build/MatildaPianoTests_artefacts/Release/MatildaPianoTests
   ```
-- **Manual testing (Standalone / AU):** Record sessions and use the troubleshooting checklist in **`docs/TESTING-LOG.md`** (sound, GUI keys, samples, output device).
+- **Manual testing (Standalone / AU):** Record sessions and use the troubleshooting checklist in **`docs/TESTING-LOG.md`** (sound, GUI keys, output device).
 
 ## Development Notes
 
@@ -149,15 +155,14 @@ Place WAV files named by note + octave 0–7 (e.g. `c0.wav`, `c#5.wav`). Octave 
 - The processor owns a `MidiKeyboardState` shared with the editor; on-screen keyboard input is injected into MIDI in `processBlock()` so the synth plays from the GUI keyboard.
 - All parameters are automatable in the host DAW.
 - The delay module syncs to host tempo via `AudioPlayHead::getPosition()` / `PositionInfo::getBpm()`.
-- Samples are loaded into RAM (no disk streaming in v1).
+- **v2:** No sample loading; the physical engine allocates delay lines in `prepareToPlay()`.
 - Maximum polyphony: 32 voices.
 
 ## Future Enhancements
 
 - [ ] Preset system
-- [ ] Additional piano variations
+- [ ] Richer physical model (inharmonicity, dual strings, sympathetic resonance)
 - [ ] Sustain pedal support
-- [ ] Round-robin sample playback
 - [ ] Windows VST3 build
 
 ## Pushing to GitHub
