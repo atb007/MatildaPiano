@@ -12,10 +12,15 @@ if(DEFINED JUCE_DIR AND JUCE_DIR AND NOT EXISTS "${JUCE_DIR}/JUCEConfig.cmake")
 endif()
 
 # C and CXX: JUCE subprojects may use C, so both are required (fixes CMAKE_C_COMPILE_OBJECT missing).
-project(MatildaPiano VERSION 2.0.0 LANGUAGES C CXX)
+project(MatildaPiano VERSION 3.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# ONNX Runtime for neural piano synthesis
+set(ONNXRUNTIME_ROOT "/usr/local/onnxruntime" CACHE PATH "Path to ONNX Runtime installation")
+include_directories(${ONNXRUNTIME_ROOT}/include)
+link_directories(${ONNXRUNTIME_ROOT}/lib)
 
 # JUCE: use install prefix (JUCEConfig.cmake) or source directory (add_subdirectory)
 set(JUCE_DIR "${JUCE_DIR}" CACHE PATH "JUCE install prefix or source directory")
@@ -32,11 +37,11 @@ endif()
 juce_add_plugin(MatildaPiano
     COMPANY_NAME "MatildaAudio"
     PLUGIN_MANUFACTURER_CODE MatA
-    PLUGIN_CODE MtP2
+    PLUGIN_CODE MtP3
     FORMATS AU Standalone
-    PRODUCT_NAME "Matilda Piano 2"
-    DESCRIPTION "Matilda Piano — physical string model (v2)"
-    VERSION 2.0.0
+    PRODUCT_NAME "Matilda Piano 3"
+    DESCRIPTION "Matilda Piano — neural network synthesis (v3)"
+    VERSION 3.0.0
     PLUGIN_MANUFACTURER "Matilda Audio"
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
@@ -54,8 +59,8 @@ target_sources(MatildaPiano PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Parameters.cpp
-    Source/MatildaPhysicalVoice.cpp
-    Source/MatildaPhysicalSound.cpp
+    Source/MatildaNeuralVoice.cpp
+    Source/MatildaNeuralSound.cpp
     Source/TapeModule.cpp
     Source/DelayModule.cpp
     Source/ReverbModule.cpp
@@ -69,8 +74,8 @@ target_sources(MatildaPiano PRIVATE
     Source/PluginProcessor.h
     Source/PluginEditor.h
     Source/Parameters.h
-    Source/MatildaPhysicalVoice.h
-    Source/MatildaPhysicalSound.h
+    Source/MatildaNeuralVoice.h
+    Source/MatildaNeuralSound.h
     Source/TapeModule.h
     Source/DelayModule.h
     Source/ReverbModule.h
@@ -79,7 +84,7 @@ target_sources(MatildaPiano PRIVATE
     Source/MatildaKeyboardComponent.h
 )
 
-# Link JUCE modules
+# Link JUCE modules and ONNX Runtime
 target_link_libraries(MatildaPiano
     PRIVATE
         juce::juce_audio_basics
@@ -89,9 +94,16 @@ target_link_libraries(MatildaPiano
         juce::juce_gui_basics
         juce::juce_gui_extra
         juce::juce_audio_utils
+        onnxruntime
 )
 
-# BinaryData: embed assets when present. Use a separate target to avoid name clash with juce_add_plugin(MatildaPiano).
+# Set RPATH for ONNX Runtime library
+set_target_properties(MatildaPiano PROPERTIES
+    INSTALL_RPATH "${ONNXRUNTIME_ROOT}/lib"
+    BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib"
+)
+
+# BinaryData: embed assets and neural model
 file(GLOB ASSET_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/Assets/*.png"
     "${CMAKE_CURRENT_SOURCE_DIR}/Assets/*.svg"
@@ -103,10 +115,14 @@ file(GLOB ASSET_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/Assets/Fonts/Kode_Mono/static/*.ttf"
 )
 
+# Add neural network model to binary data
+list(APPEND ASSET_FILES "${CMAKE_CURRENT_SOURCE_DIR}/v3-integration/engineMain")
+
 if(ASSET_FILES)
-    juce_add_binary_data(MatildaPiano_Assets ASSETS
+    juce_add_binary_data(MatildaPiano_Assets
         SOURCES ${ASSET_FILES}
         HEADER_NAME BinaryData.h
+        NAMESPACE BinaryData
     )
     target_link_libraries(MatildaPiano PRIVATE MatildaPiano_Assets)
     # BinaryData.h is generated in juce_binarydata_MatildaPiano_Assets/JuceLibraryCode; ensure MatildaPiano can find it.
@@ -121,8 +137,8 @@ endif()
 if(APPLE)
     set_target_properties(MatildaPiano PROPERTIES
         OSX_ARCHITECTURES "arm64;x86_64"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.matildaaudio.matildapiano2"
-        MACOSX_BUNDLE_BUNDLE_NAME "Matilda Piano 2"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.matildaaudio.matildapiano3"
+        MACOSX_BUNDLE_BUNDLE_NAME "Matilda Piano 3"
     )
     
     # Set minimum macOS version
@@ -130,13 +146,13 @@ if(APPLE)
         OSX_DEPLOYMENT_TARGET "12.0"
     )
     
-    # Optional: copy keySamples for v1-style workflows / A-B; v2 engine does not require WAVs.
+    # Optional: copy keySamples for v1-style workflows / A-B; v3 neural engine does not require WAVs.
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/keySamples")
         add_custom_command(TARGET MatildaPiano_Standalone POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${CMAKE_CURRENT_SOURCE_DIR}/keySamples"
                 "$<TARGET_FILE_DIR:MatildaPiano_Standalone>/../Resources/keySamples"
-            COMMENT "Copying keySamples into Standalone app bundle"
+            COMMENT "Copying keySamples into Standalone app bundle (v1 only)"
         )
     endif()
     # Copy Assets (Images + Fonts) so left-panel image and fonts load from Resources when BinaryData names differ
@@ -160,8 +176,8 @@ target_sources(MatildaPianoTests PRIVATE
     Source/Parameters.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
-    Source/MatildaPhysicalVoice.cpp
-    Source/MatildaPhysicalSound.cpp
+    Source/MatildaNeuralVoice.cpp
+    Source/MatildaNeuralSound.cpp
     Source/TapeModule.cpp
     Source/DelayModule.cpp
     Source/ReverbModule.cpp
@@ -174,12 +190,16 @@ target_include_directories(MatildaPianoTests PRIVATE
 )
 target_compile_definitions(MatildaPianoTests PRIVATE
     MATILDA_HAS_BINARY_DATA=0
-    JucePlugin_Name="Matilda Piano 2"
+    JucePlugin_Name="Matilda Piano 3"
     JucePlugin_IsMidiEffect=0
     JucePlugin_IsSynth=1
     JucePlugin_WantsMidiInput=1
     JucePlugin_ProducesMidiOutput=0
 )
+
+# Link ONNX Runtime for tests
+target_include_directories(MatildaPianoTests PRIVATE ${ONNXRUNTIME_ROOT}/include)
+target_link_directories(MatildaPianoTests PRIVATE ${ONNXRUNTIME_ROOT}/lib)
 target_link_libraries(MatildaPianoTests PRIVATE
     juce::juce_core
     juce::juce_audio_basics

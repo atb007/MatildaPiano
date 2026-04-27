@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "MatildaNeuralVoice.h"
 
 // Set to 1 to bypass Tape/Delay/Reverb (synth -> master only). Use to isolate "no sound" when testing.
 #ifndef MATILDA_BYPASS_DSP_DEBUG
@@ -19,10 +20,23 @@ MatildaPianoAudioProcessor::MatildaPianoAudioProcessor()
 #endif
     , valueTreeState(*this, nullptr, "PARAMETERS", Parameters::createParameterLayout())
 {
-    for (int i = 0; i < numVoices; ++i)
-        synth.addVoice(new MatildaPhysicalVoice());
-
-    setupPhysicalEngine();
+    // Initialize neural model first (loads ONNX model)
+    try
+    {
+        neuralModel = std::make_unique<NeuralModel>("engineMain");
+        neuralModelStatus_ = "Neural model loaded successfully";
+        
+        // Create voices with neural model reference
+        for (int i = 0; i < numVoices; ++i)
+            synth.addVoice(new MatildaNeuralVoice(neuralModel.get()));
+        
+        setupNeuralEngine();
+    }
+    catch (const std::exception& e)
+    {
+        neuralModelStatus_ = "ERROR: " + juce::String(e.what());
+        juce::Logger::writeToLog("Failed to initialize neural engine: " + juce::String(e.what()));
+    }
 }
 
 MatildaPianoAudioProcessor::~MatildaPianoAudioProcessor()
@@ -100,10 +114,8 @@ void MatildaPianoAudioProcessor::prepareToPlay(double sampleRate, int samplesPer
     
     // Prepare synthesiser
     synth.setCurrentPlaybackSampleRate(sampleRate);
-    // Set ADSR sample rate on our voices so envelope timing is correct (was causing sharp burst then silence)
-    for (int i = 0; i < synth.getNumVoices(); ++i)
-        if (auto* v = dynamic_cast<MatildaPhysicalVoice*>(synth.getVoice(i)))
-            v->setSampleRate(sampleRate);
+    // Note: MatildaNeuralVoice doesn't need explicit setSampleRate() call
+    // (it gets sampleRate from getSampleRate() in renderNextBlock)
 
     // Prepare DSP modules
     tapeModule.prepare(spec);
@@ -119,7 +131,7 @@ void MatildaPianoAudioProcessor::prepareToPlay(double sampleRate, int samplesPer
 void MatildaPianoAudioProcessor::releaseResources()
 {
     // Do not clear synth sounds here — the host may call this when reconfiguring
-    // audio; the physical engine sound is re-registered only from setupPhysicalEngine().
+    // audio; the neural engine sound is re-registered only from setupNeuralEngine().
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -238,11 +250,10 @@ void MatildaPianoAudioProcessor::setStateInformation(const void* data, int sizeI
     }
 }
 
-void MatildaPianoAudioProcessor::setupPhysicalEngine()
+void MatildaPianoAudioProcessor::setupNeuralEngine()
 {
     synth.clearSounds();
-    sampleLoadStatus_.clear();
-    synth.addSound(new MatildaPhysicalSound());
+    synth.addSound(new MatildaNeuralSound());
 }
 
 void MatildaPianoAudioProcessor::updateParameters()
@@ -255,12 +266,9 @@ void MatildaPianoAudioProcessor::updateParameters()
     
     for (int i = 0; i < synth.getNumVoices(); ++i)
     {
-        if (auto* voice = dynamic_cast<MatildaPhysicalVoice*>(synth.getVoice(i)))
+        if (auto* voice = dynamic_cast<MatildaNeuralVoice*>(synth.getVoice(i)))
         {
-            voice->setAttack(attack);
-            voice->setDecay(decay);
-            voice->setSustain(sustain);
-            voice->setRelease(release);
+            voice->setADSRParameters(attack, decay, sustain, release);
         }
     }
     

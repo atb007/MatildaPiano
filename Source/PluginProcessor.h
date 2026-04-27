@@ -1,13 +1,17 @@
 #pragma once
 
 #include <array>
+#include <memory>
 #include <JuceHeader.h>
 #include "Parameters.h"
-#include "MatildaPhysicalVoice.h"
-#include "MatildaPhysicalSound.h"
+#include "MatildaNeuralVoice.h"
+#include "MatildaNeuralSound.h"
 #include "TapeModule.h"
 #include "DelayModule.h"
 #include "ReverbModule.h"
+
+// Forward declare NeuralModel
+class NeuralModel;
 
 class MatildaPianoAudioProcessor : public juce::AudioProcessor
 {
@@ -45,22 +49,25 @@ public:
     
     juce::AudioProcessorValueTreeState& getValueTreeState() { return valueTreeState; }
     
-    /** Registers the physical-model sound (v2 — no WAV samples). */
-    void setupPhysicalEngine();
+    /** Initializes the neural network engine (v3 — ONNX-based synthesis). */
+    void setupNeuralEngine();
     juce::Synthesiser& getSynth() { return synth; }
 
     /** Shared keyboard state for the on-screen MidiKeyboardComponent; processor injects it into MIDI in processBlock. */
     juce::MidiKeyboardState& getKeyboardState() { return keyboardState; }
     const juce::MidiKeyboardState& getKeyboardState() const { return keyboardState; }
 
-    /** Optional status line for UI (v2: usually empty). Safe to read from message thread. */
-    juce::String getSampleLoadStatus() const { return sampleLoadStatus_; }
+    /** Status line for UI (v3: neural model info). Safe to read from message thread. */
+    juce::String getSampleLoadStatus() const { return neuralModelStatus_; }
 
 private:
     juce::AudioProcessorValueTreeState valueTreeState;
     juce::MidiKeyboardState keyboardState;
     juce::Synthesiser synth;
     static constexpr int numVoices = 32;
+    
+    // Neural model (v3)
+    std::unique_ptr<NeuralModel> neuralModel;
     
     TapeModule tapeModule;
     DelayModule delayModule;
@@ -70,7 +77,7 @@ private:
     
     double currentSampleRate = 44100.0;
 
-    juce::String sampleLoadStatus_;
+    juce::String neuralModelStatus_;
     std::array<bool, 128> keyWasDown = {};
 
     void updateParameters();
