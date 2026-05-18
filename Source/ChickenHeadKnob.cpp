@@ -14,13 +14,19 @@ ChickenHeadKnobLookAndFeel::ChickenHeadKnobLookAndFeel(bool isWhiteKnob)
 {
     if (whiteKnob)
     {
-        knobColor = juce::Colour(0xFFFFFFFF);       // White fill (ADSR)
-        indicatorColor = juce::Colour(0xFF1a1a1a); // Black chicken-head (ADSR)
+        // ADSR knobs: White base with purple/blue indicator
+        knobFillColor = juce::Colour(0xFFFFFFFF);           // White fill
+        inactiveIndicatorColor = juce::Colour(0xFF686DD1);  // Purple/blue indicator (#686DD1)
+        activeIndicatorColor = juce::Colour(0xFF686DD1);    // Purple/blue indicator (#686DD1)
+        activeArcColor = juce::Colour(0xFFFDB813);          // Golden arc indicator (unused for now)
     }
     else
     {
-        knobColor = juce::Colour(0xFF0d0d0d);       // Black/dark (Figma effect rack)
-        indicatorColor = juce::Colour(0xFFE87C2C);  // Orange chicken-head
+        // Effect knobs: Black base with golden indicator
+        knobFillColor = juce::Colour(0xFF1a1a1a);           // Black/dark fill
+        inactiveIndicatorColor = juce::Colour(0xFFFDB813);  // Golden yellow indicator
+        activeIndicatorColor = juce::Colour(0xFFFDB813);    // Golden yellow indicator
+        activeArcColor = juce::Colour(0xFFFDB813);          // Golden arc indicator (unused for now)
     }
 }
 
@@ -28,30 +34,33 @@ void ChickenHeadKnobLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int 
                                                    float sliderPos, float rotaryStartAngle, float rotaryEndAngle,
                                                    juce::Slider&)
 {
-    auto bounds = juce::Rectangle<int>(x, y, width, height).toFloat().reduced(2);
+    auto bounds = juce::Rectangle<int>(x, y, width, height).toFloat();
     auto centre = bounds.getCentre();
     auto radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) / 2.0f;
-    auto lineW = juce::jmin(6.0f, radius * 0.4f);
-    auto arcRadius = radius - lineW * 0.5f;
-
-    // JUCE passes angles "clockwise from top". Convert to math (0 = east, positive CCW) for indicator.
+    
+    // Draw main knob circle (white for ADSR, black for FX)
+    g.setColour(knobFillColor);
+    g.fillEllipse(bounds);
+    
+    // Draw subtle outer border (very thin)
+    g.setColour(whiteKnob ? juce::Colour(0xFFE0E0E0) : juce::Colour(0xFF2a2a2a));
+    g.drawEllipse(bounds, 0.5f);
+    
+    // Calculate indicator line position
     float toAngle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
     float toAngleMath = clockwiseFromTopToMath(toAngle);
-
-    // Knob fill: solid white (ADSR) or black (FX)
-    auto fillBounds = bounds.reduced(lineW);
-    g.setColour(knobColor);
-    g.fillEllipse(fillBounds);
-
-    // Outer ring
-    g.setColour(whiteKnob ? juce::Colour(0xFFcccccc) : juce::Colour(0xFF1a1a1a));
-    g.drawEllipse(bounds.reduced(lineW * 0.5f), lineW * 0.5f);
-
-    // Chicken-head indicator (aligned with value; zero = 7 o'clock when setRotaryParameters(210°, 480°) used)
-    auto tipX = centre.x + arcRadius * std::cos(toAngleMath);
-    auto tipY = centre.y + arcRadius * std::sin(toAngleMath);
-    g.setColour(indicatorColor);
-    g.drawLine(centre.x, centre.y, tipX, tipY, lineW * 0.9f);
-
-    g.fillEllipse(centre.x - lineW * 0.5f, centre.y - lineW * 0.5f, lineW, lineW);
+    
+    // Draw indicator line - same color and length at all positions
+    const float indicatorLength = radius * 0.55f; // Fixed length
+    const float indicatorWidth = 2.5f; // Fixed width
+    const float indicatorStartRadius = radius * 0.15f; // Start from near center
+    
+    auto startX = centre.x + indicatorStartRadius * std::cos(toAngleMath);
+    auto startY = centre.y + indicatorStartRadius * std::sin(toAngleMath);
+    auto endX = centre.x + indicatorLength * std::cos(toAngleMath);
+    auto endY = centre.y + indicatorLength * std::sin(toAngleMath);
+    
+    // Always use the active indicator color (purple for ADSR, golden for FX)
+    g.setColour(activeIndicatorColor);
+    g.drawLine(startX, startY, endX, endY, indicatorWidth);
 }

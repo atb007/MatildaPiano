@@ -183,8 +183,33 @@ void MatildaPianoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
     }
 
-    // Process MIDI and render synthesiser
-    synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
+    // Transpose all MIDI notes UP by one octave (+12 semitones)
+    // C0 (MIDI 12) -> C1 (MIDI 24), C1 (MIDI 24) -> C2 (MIDI 36), etc.
+    juce::MidiBuffer transposedMessages;
+    for (const auto metadata : midiMessages)
+    {
+        auto message = metadata.getMessage();
+        if (message.isNoteOnOrOff())
+        {
+            int transposedNote = message.getNoteNumber() + 12;
+            // Clamp to valid MIDI range (0-127)
+            if (transposedNote >= 0 && transposedNote <= 127)
+            {
+                if (message.isNoteOn())
+                    transposedMessages.addEvent(juce::MidiMessage::noteOn(message.getChannel(), transposedNote, message.getVelocity()), metadata.samplePosition);
+                else
+                    transposedMessages.addEvent(juce::MidiMessage::noteOff(message.getChannel(), transposedNote, message.getVelocity()), metadata.samplePosition);
+            }
+        }
+        else
+        {
+            // Keep non-note messages as-is
+            transposedMessages.addEvent(message, metadata.samplePosition);
+        }
+    }
+
+    // Process MIDI and render synthesiser with transposed messages
+    synth.renderNextBlock(buffer, transposedMessages, 0, buffer.getNumSamples());
 
     // Polyphony gain: Synthesiser sums all voices; many notes → clip → burst then flat "blank" sound.
     // Use 1/numVoices so 32 voices peak at 1.0 (no clamp needed). Single note = 1/32; master gain

@@ -245,17 +245,19 @@ MatildaPianoAudioProcessorEditor::MatildaPianoAudioProcessorEditor(MatildaPianoA
     xyPad = std::make_unique<XYPadComponent>(p.getValueTreeState());
     addAndMakeVisible(xyPad.get());
 
-    // Keyboard: C0–C7 (MIDI 12–96). Full width and design colours (white / black keys).
+    // Keyboard: C0–C7 (MIDI 12–96, transposed down one octave at audio level)
     keyboardComponent.setAvailableRange(12, 96);
     keyboardComponent.setLowestVisibleKey(12);
-    keyboardComponent.setOctaveForMiddleC(4);
-    // Keybed background: transparent so parent can draw keyboard.png; keys drawn by MatildaKeyboardComponent (Figma style).
-    keyboardComponent.setColour(juce::MidiKeyboardComponent::whiteNoteColourId, juce::Colours::transparentBlack);
-    keyboardComponent.setColour(juce::MidiKeyboardComponent::blackNoteColourId, juce::Colour(0xFF3D3D3D)); // Figma black keys
-    keyboardComponent.setColour(juce::MidiKeyboardComponent::keySeparatorLineColourId, juce::Colour(0xFF2a6080)); // Darker line on keybed
-    keyboardComponent.setColour(juce::MidiKeyboardComponent::keyDownOverlayColourId, juce::Colour(0x55ffffff));
-    keyboardComponent.setColour(juce::MidiKeyboardComponent::mouseOverKeyOverlayColourId, juce::Colour(0x22ffffff));
-    keyboardComponent.setColour(juce::MidiKeyboardComponent::textLabelColourId, juce::Colours::white);
+    keyboardComponent.setOctaveForMiddleC(4);  // Display as C4 for middle C, but sounds as C3
+    // Remove shadow color to show custom bedding
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::shadowColourId, juce::Colours::transparentBlack);
+    // Keys use custom MatildaKeyboardComponent with Figma states (Idle, Hover, Pressed)
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::whiteNoteColourId, juce::Colours::white);
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::blackNoteColourId, juce::Colour(0xFF2A2A2A)); // Figma black key idle
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::keySeparatorLineColourId, juce::Colour(0xFFE0E0E0)); // Light separator
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::keyDownOverlayColourId, juce::Colour(0xFF5190B3)); // Pressed: blue-teal
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::mouseOverKeyOverlayColourId, juce::Colour(0x44FFFFFF)); // Hover: light overlay
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::textLabelColourId, juce::Colours::black.withAlpha(0.5f));
     addAndMakeVisible(keyboardComponent);
 
     // Background and assets: gradient + left panel, XY pad, keyboard image, grand piano underline

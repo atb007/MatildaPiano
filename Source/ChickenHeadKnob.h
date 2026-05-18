@@ -13,7 +13,9 @@ public:
                          juce::Slider& slider) override;
     
 private:
-    bool whiteKnob; // true for ADSR knobs (white), false for FX knobs (green)
-    juce::Colour knobColor;
-    juce::Colour indicatorColor;
+    bool whiteKnob; // true for ADSR knobs (white), false for FX knobs (black)
+    juce::Colour knobFillColor;
+    juce::Colour inactiveIndicatorColor;
+    juce::Colour activeIndicatorColor;
+    juce::Colour activeArcColor;
 };
