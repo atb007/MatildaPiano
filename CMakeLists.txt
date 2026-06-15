@@ -38,7 +38,8 @@ juce_add_plugin(MatildaPiano
     COMPANY_NAME "MatildaAudio"
     PLUGIN_MANUFACTURER_CODE MatA
     PLUGIN_CODE MtP3
-    FORMATS AU Standalone
+    FORMATS AU VST3 Standalone
+    VST3_CATEGORIES Instrument Synth
     PRODUCT_NAME "Matilda Piano 3"
     DESCRIPTION "Matilda Piano — neural network synthesis (v3)"
     VERSION 3.0.0
@@ -85,6 +86,10 @@ target_sources(MatildaPiano PRIVATE
 )
 
 # Link JUCE modules and ONNX Runtime
+target_compile_definitions(MatildaPiano
+    PUBLIC
+        JUCE_VST3_CAN_REPLACE_VST2=0
+)
 target_link_libraries(MatildaPiano
     PRIVATE
         juce::juce_audio_basics
