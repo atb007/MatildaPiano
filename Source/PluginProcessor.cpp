@@ -7,6 +7,24 @@
 #define MATILDA_BYPASS_DSP_DEBUG 0
 #endif
 
+namespace
+{
+void sanitizeBuffer(juce::AudioBuffer<float>& buffer)
+{
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+    {
+        float* data = buffer.getWritePointer(ch);
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            if (!std::isfinite(data[i]))
+                data[i] = 0.0f;
+            else
+                data[i] = std::tanh(data[i]);
+        }
+    }
+}
+} // namespace
+
 MatildaPianoAudioProcessor::MatildaPianoAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
     : AudioProcessor(BusesProperties()
@@ -28,7 +46,7 @@ MatildaPianoAudioProcessor::MatildaPianoAudioProcessor()
         
         // Create voices with neural model reference
         for (int i = 0; i < numVoices; ++i)
-            synth.addVoice(new MatildaNeuralVoice(neuralModel.get()));
+            synth.addVoice(new MatildaNeuralVoice(neuralModel.get(), &inferenceScheduler));
         
         setupNeuralEngine();
     }
@@ -114,22 +132,31 @@ void MatildaPianoAudioProcessor::prepareToPlay(double sampleRate, int samplesPer
     
     // Prepare synthesiser
     synth.setCurrentPlaybackSampleRate(sampleRate);
-    // Note: MatildaNeuralVoice doesn't need explicit setSampleRate() call
-    // (it gets sampleRate from getSampleRate() in renderNextBlock)
+    for (int i = 0; i < synth.getNumVoices(); ++i)
+    {
+        if (auto* voice = dynamic_cast<MatildaNeuralVoice*>(synth.getVoice(i)))
+            voice->setSampleRate(sampleRate);
+    }
 
     // Prepare DSP modules
     tapeModule.prepare(spec);
+    tapeModule.reset();
     delayModule.prepare(spec);
     delayModule.reset();
     reverbModule.prepare(spec);
+    reverbModule.reset();
     masterGain.prepare(spec);
-    
-    // Set initial gain
-    masterGain.setGainLinear(Parameters::MASTER_VOL_DEFAULT);
+    masterGain.setGainLinear(1.0f);
+
+    smoothedSynthBusGain = Parameters::MASTER_VOL_DEFAULT * masterMakeUp
+                         / static_cast<float>(numVoices);
+    hostWasPlaying = false;
+    inferenceScheduler.start();
 }
 
 void MatildaPianoAudioProcessor::releaseResources()
 {
+    inferenceScheduler.stop();
     // Do not clear synth sounds here — the host may call this when reconfiguring
     // audio; the neural engine sound is re-registered only from setupNeuralEngine().
 }
@@ -168,7 +195,34 @@ void MatildaPianoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     // Update parameters
     updateParameters();
 
-    // Inject on-screen / laptop keyboard state into MIDI (poll state so we don't rely on processNextMidiBuffer timing)
+    if (!inferenceScheduler.isRunning())
+        inferenceScheduler.start();
+
+    bool hostIsPlaying = false;
+    if (auto* playHead = getPlayHead())
+    {
+        if (auto position = playHead->getPosition())
+            hostIsPlaying = position->getIsPlaying();
+    }
+
+    if (hostIsPlaying && !hostWasPlaying)
+    {
+        synth.allNotesOff(0, true);
+        tapeModule.reset();
+        delayModule.reset();
+        reverbModule.reset();
+    }
+    else if (!hostIsPlaying && hostWasPlaying)
+    {
+        synth.allNotesOff(0, true);
+    }
+
+    hostWasPlaying = hostIsPlaying;
+
+    // Host MIDI at concert pitch; on-screen keyboard gets +12 (UI label offset from UI-UPDATES.md).
+    juce::MidiBuffer synthMidi;
+    synthMidi.addEvents(midiMessages, 0, -1, 0);
+
     const int midiChannel = 1;
     for (int note = 0; note < 128; ++note)
     {
@@ -176,73 +230,62 @@ void MatildaPianoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         if (nowOn != keyWasDown[note])
         {
             keyWasDown[note] = nowOn;
+            const int transposedNote = note + 12;
+            if (transposedNote > 127)
+                continue;
             if (nowOn)
-                midiMessages.addEvent(juce::MidiMessage::noteOn(midiChannel, note, (juce::uint8)100), 0);
+                synthMidi.addEvent(juce::MidiMessage::noteOn(midiChannel, transposedNote, (juce::uint8)100), 0);
             else
-                midiMessages.addEvent(juce::MidiMessage::noteOff(midiChannel, note), 0);
+                synthMidi.addEvent(juce::MidiMessage::noteOff(midiChannel, transposedNote), 0);
         }
     }
 
-    // Transpose all MIDI notes UP by one octave (+12 semitones)
-    // C0 (MIDI 12) -> C1 (MIDI 24), C1 (MIDI 24) -> C2 (MIDI 36), etc.
-    juce::MidiBuffer transposedMessages;
-    for (const auto metadata : midiMessages)
+    int incomingNoteOnEvents = 0;
+    for (const auto metadata : synthMidi)
     {
-        auto message = metadata.getMessage();
-        if (message.isNoteOnOrOff())
-        {
-            int transposedNote = message.getNoteNumber() + 12;
-            // Clamp to valid MIDI range (0-127)
-            if (transposedNote >= 0 && transposedNote <= 127)
-            {
-                if (message.isNoteOn())
-                    transposedMessages.addEvent(juce::MidiMessage::noteOn(message.getChannel(), transposedNote, message.getVelocity()), metadata.samplePosition);
-                else
-                    transposedMessages.addEvent(juce::MidiMessage::noteOff(message.getChannel(), transposedNote, message.getVelocity()), metadata.samplePosition);
-            }
-        }
-        else
-        {
-            // Keep non-note messages as-is
-            transposedMessages.addEvent(message, metadata.samplePosition);
-        }
+        if (metadata.getMessage().isNoteOn())
+            ++incomingNoteOnEvents;
     }
+    inferenceScheduler.beginAudioBlock(incomingNoteOnEvents);
 
-    // Process MIDI and render synthesiser with transposed messages
-    synth.renderNextBlock(buffer, transposedMessages, 0, buffer.getNumSamples());
+    synth.renderNextBlock(buffer, synthMidi, 0, buffer.getNumSamples());
 
-    // Polyphony gain: Synthesiser sums all voices; many notes → clip → burst then flat "blank" sound.
-    // Use 1/numVoices so 32 voices peak at 1.0 (no clamp needed). Single note = 1/32; master gain
-    // is scaled in updateParameters() so the 0–1 knob gives audible level (see MASTER_MAKEUP).
-    const float polyphonyGain = 1.0f / static_cast<float>(numVoices);
-    buffer.applyGain(polyphonyGain);
-    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+    int activeVoices = 0;
+    for (int i = 0; i < synth.getNumVoices(); ++i)
     {
-        float* data = buffer.getWritePointer(ch);
-        for (int i = 0; i < buffer.getNumSamples(); ++i)
-            data[i] = juce::jlimit(-1.0f, 1.0f, data[i]);
+        if (synth.getVoice(i)->isVoiceActive())
+            ++activeVoices;
     }
+
+    const float masterVol = valueTreeState.getRawParameterValue(Parameters::MASTER_VOL)->load();
+    const float activeVoiceCount = static_cast<float>(juce::jmax(1, activeVoices));
+    const float targetSynthBusGain = masterVol * masterMakeUp
+                                   / (static_cast<float>(numVoices) * activeVoiceCount);
+
+    // Fast drop when polyphony rises (prevents clip screech); slow rise when voices release
+    // (prevents FX tail amplification at clip end / transport edges).
+    if (targetSynthBusGain < smoothedSynthBusGain)
+        smoothedSynthBusGain = targetSynthBusGain;
+    else
+        smoothedSynthBusGain += (targetSynthBusGain - smoothedSynthBusGain) * 0.02f;
+
+    buffer.applyGain(smoothedSynthBusGain);
+
+    sanitizeBuffer(buffer);
 
     juce::dsp::AudioBlock<float> block(buffer);
     juce::dsp::ProcessContextReplacing<float> context(block);
 
 #if MATILDA_BYPASS_DSP_DEBUG
-    // Bypass Tape, Delay, Reverb — synth -> master only (for "no sound" debugging; set MATILDA_BYPASS_DSP_DEBUG to 0 to restore full chain)
     masterGain.process(context);
 #else
-    // Full DSP chain: Tape (XY) -> Delay -> Reverb -> Master Gain
     tapeModule.process(block);
     delayModule.process(block);
     reverbModule.process(block);
     masterGain.process(context);
 #endif
-    // Final safety clamp so master make-up never sends > 1.0 to the host (avoids burst/blank when many keys held)
-    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-    {
-        float* data = buffer.getWritePointer(ch);
-        for (int i = 0; i < buffer.getNumSamples(); ++i)
-            data[i] = juce::jlimit(-1.0f, 1.0f, data[i]);
-    }
+
+    sanitizeBuffer(buffer);
 }
 
 bool MatildaPianoAudioProcessor::hasEditor() const
@@ -328,23 +371,22 @@ void MatildaPianoAudioProcessor::updateParameters()
         {
             if (auto bpm = positionInfo->getBpm())
             {
-                if (*bpm > 0.0)
+                if (*bpm > 0.0 && std::abs(*bpm - lastHostTempo) > 0.1)
+                {
+                    lastHostTempo = *bpm;
                     delayModule.setHostTempo(*bpm);
+                }
             }
         }
     }
     
     // Update reverb module. Base reverb from knob; XY pad adds "wash" (watery, washed-out vibe)
     float baseReverb = valueTreeState.getRawParameterValue(Parameters::REVERB)->load();
-    float xyWash = xyY * 0.5f + xyX * 0.3f;  // Y = main wash, X = secondary
+    float xyWash = xyY * 0.5f + xyX * 0.3f;
     float reverbMix = juce::jlimit(0.0f, 1.0f, baseReverb + xyWash);
     reverbModule.setMix(reverbMix);
-    
-    // Update master gain. Knob stays 0–1; we apply make-up so that after 1/numVoices polyphony gain
-    // a single note is audible (e.g. 0.8 → ~12.8 linear so 1 note ≈ 0.4).
-    const float masterMakeUp = 16.0f;
-    float masterVol = valueTreeState.getRawParameterValue(Parameters::MASTER_VOL)->load();
-    masterGain.setGainLinear(masterVol * masterMakeUp);
+
+    masterGain.setGainLinear(1.0f);
 }
 
 // This creates new instances of the plugin.

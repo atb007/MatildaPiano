@@ -74,7 +74,8 @@ Track major project phases. Update this file when a milestone is completed or a 
 | 2026-02-27 | M2b fonts: bundle Resources + flat/nested paths; BinaryData glob; deprecation fix. |
 | 2026-02-27 | M2c: Effect module enabled (bypass=0); delay Off at minimum; XY pad effects active. |
 | 2026-02-27 | **v1.0.0** tagged — milestone release; polyphony fix, delay/XY improvements; push to GitHub. |
-| 2026-04-24 | **M3 / v2.0.0:** Physical string engine (`MatildaPhysicalVoice` / `MatildaPhysicalSound`); product **Matilda Piano 2** (`PLUGIN_CODE` MtP2); branch `v2-physical-model`. |
+| 2026-04-28 | **M4 / v3.0.0:** Neural ONNX engine; **Matilda Piano 3** (`MtP3`); branch `v3-neural-network`. |
+| 2026-06-16 | **M4 post-release:** GarageBand piano-roll issues documented; v3 stability fixes (local). **M5 / v4** planning — `docs/version4-prd.md`, `docs/V3-RETROSPECTIVE.md`. |
 
 ---
 
@@ -102,16 +103,37 @@ Track major project phases. Update this file when a milestone is completed or a 
 
 ---
 
-## Milestone 4: Neural network engine (v3.0.0) — Starting 2026-04-28
+## Milestone 4: Neural network engine (v3.0.0) — 2026-04-28
 
-**Status:** Planning / Setup
+**Status:** ✅ Shipped (with post-release caveats — see M5)
 
-**Scope:** Replace physical model with **neural network synthesis** using PianoForte engine (MIT licensed). Keep all UI, effects, and parameter control. Achieve authentic grand piano timbre.
+**Scope:** Replace physical model with **neural network synthesis** using PianoForte engine (MIT licensed). Keep all UI, effects, and parameter control.
 
-**Approach:**
-- Integrate PianoForte's ONNX-based neural piano synthesis
-- Preserve UI (Figma design), effects chain, ADSR, XY pad
-- Use their trained models (Steinway, Yamaha) or train custom
-- Separate development folder: `v3-neural-network/`
+**Delivered:**
+- ONNX Runtime integration; `MatildaNeuralVoice` / `MatildaNeuralSound`
+- Embedded ~8.7KB ONNX model; async inference
+- Product **Matilda Piano 3** (`PLUGIN_CODE` **MtP3**); VST3 + AU on macOS
+- Branch **`v3-neural-network`**
 
-**Target:** Authentic piano sound with ~4-6 hours integration work.
+**Post-release limitations (June 2026):**
+- GarageBand **piano-roll MIDI** — screech/silence at first note; not fully fixed in v3
+- **Schuck–Young / inharmonic partials** intentionally omitted (pure neural); see `docs/V3-RETROSPECTIVE.md`
+- Live play / Musical Typing closer to acceptable at commit `72a9237`; further local fixes unvalidated in DAW
+
+**References:** `CHANGELOG.md`, `v3-integration/`, `docs/V3-RETROSPECTIVE.md`
+
+---
+
+## Milestone 5: Hybrid acoustic engine (v4.0.0) — Starting June 2026
+
+**Status:** 📋 Planning
+
+**Scope:** Schuck–Young partial frequencies + ONNX amplitudes + optional low-note physical blend; user-facing Inharmonicity knob; MIDI/DAW guard rails for octave shifts and stuck notes.
+
+**PRD:** **`docs/version4-prd.md`**
+
+**Target plugin:** **Matilda Piano 4** (`PLUGIN_CODE` **MtP4**, side-by-side with v1–v3)
+
+**Success criteria:** GarageBand piano roll stable; no audio-thread blocking; smoothed gain staging; continuous pitch map over full MIDI range.
+
+**References:** `docs/V3-RETROSPECTIVE.md`, `v3-integration/reference-source/Voices.h`, `CASE-STUDY.md` Part 10

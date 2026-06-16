@@ -245,10 +245,10 @@ MatildaPianoAudioProcessorEditor::MatildaPianoAudioProcessorEditor(MatildaPianoA
     xyPad = std::make_unique<XYPadComponent>(p.getValueTreeState());
     addAndMakeVisible(xyPad.get());
 
-    // Keyboard: C0–C7 (MIDI 12–96, transposed down one octave at audio level)
+    // Keyboard: C0–C7 (MIDI 12–96, +12 octave correction for on-screen keys only)
     keyboardComponent.setAvailableRange(12, 96);
     keyboardComponent.setLowestVisibleKey(12);
-    keyboardComponent.setOctaveForMiddleC(4);  // Display as C4 for middle C, but sounds as C3
+    keyboardComponent.setOctaveForMiddleC(4);  // Display as C4 for middle C, sounds +12 via processor
     // Remove shadow color to show custom bedding
     keyboardComponent.setColour(juce::MidiKeyboardComponent::shadowColourId, juce::Colours::transparentBlack);
     // Keys use custom MatildaKeyboardComponent with Figma states (Idle, Hover, Pressed)

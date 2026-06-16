@@ -76,6 +76,90 @@ static int runParameterLayoutTests()
     return failed;
 }
 
+
+static int runDenseMidiRenderTest()
+{
+    MatildaPianoAudioProcessor processor;
+    processor.prepareToPlay(44100.0, 512);
+    juce::AudioBuffer<float> buffer(2, 512);
+    float maxPeak = 0.0f;
+    for (int block = 0; block < 40; ++block)
+    {
+        buffer.clear();
+        juce::MidiBuffer midi;
+        if (block == 0)
+        {
+            for (int note = 48; note < 48 + 20; ++note)
+                midi.addEvent(juce::MidiMessage::noteOn(1, note, (juce::uint8) 80), 0);
+        }
+        processor.processBlock(buffer, midi);
+        maxPeak = juce::jmax(maxPeak, buffer.getMagnitude(0, 512));
+    }
+    processor.releaseResources();
+    if (maxPeak < 0.0001f) { std::cerr << "FAIL dense midi silence peak="<<maxPeak<<"\n"; return 1; }
+    std::cout << "Dense MIDI peak: " << maxPeak << "\n";
+    return 0;
+}
+
+static int runOutOfRangeNoteTest()
+{
+    MatildaPianoAudioProcessor processor;
+    processor.prepareToPlay(44100.0, 512);
+    juce::AudioBuffer<float> buffer(2, 512);
+    juce::MidiBuffer midi;
+    midi.addEvent(juce::MidiMessage::noteOn(1, 15, (juce::uint8) 100), 0);
+    processor.processBlock(buffer, midi);
+    processor.releaseResources();
+    const float peak = buffer.getMagnitude(0, 512);
+    if (peak < 0.0001f)
+    {
+        std::cerr << "FAIL: note 15 silent peak=" << peak << "\n";
+        return 1;
+    }
+    std::cout << "Note 15 peak: " << peak << "\n";
+    return 0;
+}
+
+static int runMidiRenderTest()
+{
+    MatildaPianoAudioProcessor processor;
+    if (processor.getSampleLoadStatus().containsIgnoreCase("ERROR"))
+    {
+        std::cerr << "FAIL: neural engine not loaded: " << processor.getSampleLoadStatus().toStdString() << "\n";
+        return 1;
+    }
+
+    processor.prepareToPlay(44100.0, 512);
+
+    juce::AudioBuffer<float> buffer(2, 512);
+    float maxPeak = 0.0f;
+
+    for (int block = 0; block < 80; ++block)
+    {
+        buffer.clear();
+        juce::MidiBuffer midi;
+        if (block == 0)
+            midi.addEvent(juce::MidiMessage::noteOn(1, 60, (juce::uint8) 100), 0);
+        if (block == 60)
+            midi.addEvent(juce::MidiMessage::noteOff(1, 60), 0);
+
+        processor.processBlock(buffer, midi);
+        maxPeak = juce::jmax(maxPeak, buffer.getMagnitude(0, 512));
+        maxPeak = juce::jmax(maxPeak, buffer.getMagnitude(1, 512));
+    }
+
+    processor.releaseResources();
+
+    if (maxPeak < 0.0001f)
+    {
+        std::cerr << "FAIL: processBlock produced near silence, peak=" << maxPeak << "\n";
+        return 1;
+    }
+
+    std::cout << "MIDI render peak: " << maxPeak << "\n";
+    return 0;
+}
+
 int main(int argc, char* argv[])
 {
     juce::ignoreUnused(argc, argv);
@@ -83,6 +167,9 @@ int main(int argc, char* argv[])
 
     int failed = 0;
     failed += runParameterLayoutTests();
+    failed += runMidiRenderTest();
+    failed += runDenseMidiRenderTest();
+    failed += runOutOfRangeNoteTest();
 
     if (failed > 0)
     {

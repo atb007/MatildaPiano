@@ -144,6 +144,20 @@ The interface didn't change, but user perception shifted dramatically. This is s
 - Stable, no explosions, no parameter tuning needed
 - Future-proof: can swap models without code changes
 
+### What v3 Deliberately Did Not Port (Schuck–Young / Hybrid)
+
+PianoForte's reference engine (`v3-integration/reference-source/`) is **hybrid**: ONNX amplitudes plus **Schuck–Young stretched partial frequencies** (`partialFromMidiKey`) and **inharmonic additive tables** (`G1F`, `G2F`, `G3F`) blended in on low notes. Matilda v3 shipped **pure neural** — integer harmonics `(i+1)·f₁` with ONNX weights only.
+
+**Why we cut it (Phase 1, April 2026 — not rejected after A/B listening):**
+
+1. **Integration scope:** ~6–10 hour sprint; ONNX + ADSR + FX was the critical path.
+2. **v2 scar tissue:** Karplus-Strong physical modeling failed the timbre bar; bias against another physical layer.
+3. **Model bet:** 30 ONNX amplitudes assumed to encode piano character implicitly.
+4. **Threading risk:** Reference hybrid can block the audio thread waiting for inference.
+5. **No UI knob:** Inharmonicity was engine-internal in v2; no control surface for stiffness β.
+
+Full rationale: **`docs/V3-RETROSPECTIVE.md`**. v4 reverses this — see **`docs/version4-prd.md`**.
+
 ---
 
 ## Part 3: Interface Design — Where Users Touch the System
@@ -454,6 +468,46 @@ Technically, we could have relabeled keys (C0 becomes C-1, etc.). But users expe
 
 ---
 
+## Part 10: Post-Release Reality — GarageBand & Piano Roll (June 2026)
+
+After v3 shipped, real-world DAW testing revealed gaps the milestone metrics did not capture.
+
+### What broke
+
+- **Piano-roll MIDI in GarageBand:** screech then silence on the Matilda track (sometimes muting the entire session). Classic Electric Piano on the same region worked — the failure was Matilda-specific.
+- **First note in a clip:** ONNX inference completing caused amplitude jumps ~10× above seed values in a single audio block → clip → host protective mute.
+- **Dense piano roll:** per-block inference caps left most voices on whisper-quiet seeds while a few ONNX-boosted voices dominated — perceived as silence.
+- **Earlier issues (partially fixed locally):** 32× `std::async` thread storm at clip start; delay default ON causing transport-start spikes; post-FX `16/activeVoices` gain when voices released.
+
+### What we learned
+
+Systems thinking applies to **host integration**, not just DSP:
+
+| Layer | Lesson |
+|-------|--------|
+| Inference | Never block the audio thread; single worker queue with generation-safe handoff |
+| Gain | Polyphony compensation **before** FX, smoothed — not instant post-FX spikes |
+| MIDI | Host at concert pitch; on-screen keyboard +12 only; voice tracking must survive DAW octave shifts |
+| FX | Delay Off by default; smooth delay length on BPM arrival |
+| Testing | Offline unit renders passed; GarageBand piano roll remained the hard acceptance test |
+
+**Baseline for live play:** commit `72a9237`. Further fixes exist locally on `v3-neural-network` but piano-roll first-note screech was not resolved before pausing v3 work.
+
+Detailed log: **`docs/V3-RETROSPECTIVE.md`**.
+
+### Path to v4
+
+v4 is not a cosmetic refresh — it changes the **acoustic architecture**:
+
+- Schuck–Young partial **frequencies** (user Inharmonicity knob → stiffness β)
+- ONNX for **amplitudes only**
+- Optional low-note physical blend from PianoForte reference
+- MIDI guard rails: continuous pitch map, voice-ID tracking, partial culling, parameter smoothing
+
+PRD: **`docs/version4-prd.md`**.
+
+---
+
 ## Part 9: Future Systems to Build
 
 ### Preset System
@@ -510,7 +564,7 @@ From a systems thinker's perspective, "fully functioning" doesn't mean "bug-free
 4. **Constraints are respected:** Real-time performance, platform requirements, user expectations
 5. **It can evolve:** Architecture supports future changes without rewriting everything
 
-Matilda Piano v3 achieves this. It's not "done" (no software is), but it's **stable, shipped, and usable in production**. A musician can load it in GarageBag, play a song, export audio, and release an album. That's the bar.
+Matilda Piano v3 achieved coherent subsystems and authentic timbre in live play and Musical Typing. Post-release GarageBand piano-roll testing exposed stability gaps that pure-neural architecture and async inference alone did not solve — documented in Part 10. **v4** addresses both timbre physics (Schuck–Young hybrid) and DAW integration guard rails. v3 remains a valid side-by-side install for users who prefer the pure-neural sound.
 
 ### Key Principles Revisited
 
@@ -541,6 +595,6 @@ Matilda Piano works because we thought systemically from day one.
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** May 18, 2026  
+**Document Version:** 1.1  
+**Last Updated:** June 16, 2026  
 **Author:** Product Design & Systems Architecture Team

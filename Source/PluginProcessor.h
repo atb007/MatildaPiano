@@ -63,8 +63,10 @@ public:
 private:
     juce::AudioProcessorValueTreeState valueTreeState;
     juce::MidiKeyboardState keyboardState;
+    NeuralInferenceScheduler inferenceScheduler;
     juce::Synthesiser synth;
     static constexpr int numVoices = 32;
+    static constexpr float masterMakeUp = 16.0f;
     
     // Neural model (v3)
     std::unique_ptr<NeuralModel> neuralModel;
@@ -79,6 +81,9 @@ private:
 
     juce::String neuralModelStatus_;
     std::array<bool, 128> keyWasDown = {};
+    bool hostWasPlaying = false;
+    double lastHostTempo = 120.0;
+    float smoothedSynthBusGain = 0.4f;
 
     void updateParameters();
     

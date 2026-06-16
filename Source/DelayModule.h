@@ -22,7 +22,7 @@ public:
 private:
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Linear> delayLine;
     
-    float delayTimeNormalized = 0.5f;
+    float delayTimeNormalized = 0.0f;
     float mix = 0.0f;
     double hostTempo = 120.0;
     double sampleRate = 44100.0;

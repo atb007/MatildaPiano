@@ -5,7 +5,7 @@
 
 **GitHub:** `atb007` — use for remote URLs and releases (e.g. `https://github.com/atb007/MatildaPiano`).
 
-**Milestone:** **M1–M2c** (v1 sampler + GUI) complete. **M3 / v2.0.0** — physical engine on branch **`v2-physical-model`** (2026-04-24). See `docs/MILESTONES.md`.
+**Milestone:** **M1–M2c** (v1 sampler + GUI) complete. **M3 / v2.0.0** — physical engine on branch **`v2-physical-model`**. **M4 / v3.0.0** — neural ONNX on branch **`v3-neural-network`**. **M5 / v4.0.0** — planning: **`docs/version4-prd.md`**. See `docs/MILESTONES.md` and `docs/V3-RETROSPECTIVE.md`.
 
 ---
 
@@ -65,7 +65,9 @@ open build/MatildaPiano_artefacts/Release/Matilda\ Piano\ 2.app
 - CMake uses **C + CXX** (for JUCE subprojects). **JUCE_BUILD_EXTRAS=OFF** when using JUCE source to avoid juceaide; **juce_generate_juce_header** used for plugin and test target. Xcode SDK or Command Line Tools SDK set when using JUCE source. Scripts: `build.sh`, `clean-and-build.sh` (full clean + build; supports Xcode SDK).
 
 **Suggested next steps:**
-- **v2 DSP:** Refine piano realism (inharmonicity, hammer filter, stereo pair); profile CPU at max polyphony.
+- **v4 engine:** Implement Schuck–Young partial map + ONNX amplitudes per `docs/version4-prd.md`; port `partialFromMidiKey` and physical tables from `v3-integration/reference-source/Voices.h`.
+- **MIDI guard rails:** Voice-ID tracking, continuous pitch map, partial culling for high notes, smoothed parameter changes — see v4 PRD §4.
+- **Do not reintroduce:** per-voice `std::async`, audio-thread `wait_for`, post-FX unsmoothed polyphony gain — see `docs/V3-RETROSPECTIVE.md`.
 - Add or extend tests when adding new behaviour; keep docs in sync (architecture, PRD, README, QUICKSTART, testing).
 
 ---

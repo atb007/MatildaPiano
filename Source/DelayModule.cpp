@@ -76,13 +76,14 @@ void DelayModule::updateDelayTime()
     float delaySeconds = beats * secondsPerBeat;
     const float maxDelaySeconds = 1.0f;
     delaySeconds = juce::jmin(delaySeconds, maxDelaySeconds);
-    float delaySamples = delaySeconds * static_cast<float>(sampleRate);
-    // Only update when changed to avoid zipper noise / wonky behaviour
-    if (std::abs(delaySamples - lastDelaySamples) > 0.5f)
-    {
-        lastDelaySamples = delaySamples;
-        delayLine.setDelay(delaySamples);
-    }
+    const float targetDelaySamples = delaySeconds * static_cast<float>(sampleRate);
+
+    if (lastDelaySamples < 0.0f)
+        lastDelaySamples = targetDelaySamples;
+
+    // Smooth delay length changes — instant jumps caused play-start screech when host BPM arrived.
+    lastDelaySamples += (targetDelaySamples - lastDelaySamples) * 0.05f;
+    delayLine.setDelay(lastDelaySamples);
 }
 
 int DelayModule::getSubdivisionIndex(float normalized) const

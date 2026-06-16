@@ -6,6 +6,8 @@ A beautiful piano AU plugin built with JUCE, featuring neural network synthesis 
 
 **Version:** **v3.0.0** — Neural network synthesis (ONNX Runtime). See **`CHANGELOG.md`** and **`docs/MILESTONES.md`**.
 
+**Next:** **v4.0.0** — Schuck–Young hybrid engine. PRD: **`docs/version4-prd.md`**. Context: **`docs/V3-RETROSPECTIVE.md`**.
+
 **Previous versions:**
 - v2.0.0 (frozen): Karplus-Strong physical modeling - see branch `v2-physical-model`
 - v1.0.0 (archived): Sample-based - see git tag `v1.0.0`
@@ -164,10 +166,12 @@ For the most responsive, glitch-free feel (e.g. dragging the mouse across the ke
 
 ## Future Enhancements
 
+- [ ] **v4 hybrid engine** — Schuck–Young partials, ONNX amplitudes, Inharmonicity knob (`docs/version4-prd.md`)
 - [ ] Preset system
-- [ ] Richer physical model (inharmonicity, dual strings, sympathetic resonance)
 - [ ] Sustain pedal support
 - [ ] Windows VST3 build
+
+**Retired from v3 roadmap (superseded by v4):** richer physical model via Karplus-Strong inharmonicity — see `docs/V3-RETROSPECTIVE.md` for why Schuck–Young hybrid replaces both pure neural and v2 physical paths.
 
 ## Pushing to GitHub
 

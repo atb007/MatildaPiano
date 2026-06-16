@@ -193,8 +193,15 @@ target_sources(MatildaPianoTests PRIVATE
 target_include_directories(MatildaPianoTests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
+if(ASSET_FILES)
+    target_link_libraries(MatildaPianoTests PRIVATE MatildaPiano_Assets)
+    target_include_directories(MatildaPianoTests PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}/juce_binarydata_MatildaPiano_Assets/JuceLibraryCode)
+    target_compile_definitions(MatildaPianoTests PRIVATE MATILDA_HAS_BINARY_DATA=1)
+else()
+    target_compile_definitions(MatildaPianoTests PRIVATE MATILDA_HAS_BINARY_DATA=0)
+endif()
 target_compile_definitions(MatildaPianoTests PRIVATE
-    MATILDA_HAS_BINARY_DATA=0
     JucePlugin_Name="Matilda Piano 3"
     JucePlugin_IsMidiEffect=0
     JucePlugin_IsSynth=1
@@ -215,4 +222,5 @@ target_link_libraries(MatildaPianoTests PRIVATE
     juce::juce_gui_extra
     juce::juce_audio_utils
     juce::juce_data_structures
+    onnxruntime
 )

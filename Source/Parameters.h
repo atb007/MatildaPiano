@@ -40,7 +40,7 @@ namespace Parameters
     
     constexpr float DELAY_TIME_MIN = 0.0f;
     constexpr float DELAY_TIME_MAX = 1.0f;
-    constexpr float DELAY_TIME_DEFAULT = 0.5f;
+    constexpr float DELAY_TIME_DEFAULT = 0.0f;
     
     constexpr float MASTER_VOL_MIN = 0.0f;
     constexpr float MASTER_VOL_MAX = 1.0f;

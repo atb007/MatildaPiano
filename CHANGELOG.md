@@ -2,6 +2,27 @@
 
 All notable changes to Matilda Piano are documented here.
 
+## [Unreleased] — v3 stability work & v4 planning
+
+### Documentation
+- **`docs/V3-RETROSPECTIVE.md`** — Schuck–Young / hybrid cut rationale; GarageBand piano-roll debugging log; v4 direction
+- **`docs/version4-prd.md`** — v4 product requirements (Schuck–Young + ONNX amplitudes + MIDI guard rails)
+- **`CASE-STUDY.md`** — Part 2 (v3 hybrid omission), Part 10 (post-release GarageBand reality)
+
+### v3 stability fixes (local, branch `v3-neural-network`)
+- Single background ONNX inference worker (replaces per-voice `std::async`)
+- Thread-safe amplitude handoff; no audio-thread blocking in `startNote`
+- Smoothed synth bus gain; polyphony compensation before FX
+- Delay default Off; smoothed delay length on tempo changes
+- Host MIDI at concert pitch; on-screen keyboard +12 only
+- Additional render tests in `MatildaPianoTests.cpp`
+
+**Known issue:** GarageBand piano-roll first-note screech not fully resolved — v4 planned.
+
+See **`docs/V3-RETROSPECTIVE.md`** for full detail.
+
+---
+
 ## [3.0.0] - 2026-04-28
 
 ### Matilda Piano 3 — Neural Network Synthesis

@@ -1,31 +1,65 @@
 #pragma once
 #include <JuceHeader.h>
-#include <future>
+#include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
 #include <random>
 #include <vector>
 #include <onnxruntime_cxx_api.h>
 
-// Forward declarations
 class NeuralModel;
+class MatildaNeuralVoice;
 
-/// MatildaNeuralVoice - JUCE SynthesiserVoice using ONNX neural network
-/// 
-/// Based on PianoForte's architecture (MIT License, Carlos Tarjano)
-/// Adapted for Matilda Piano v3 with simplified pure-neural approach
-/// 
-/// Architecture:
-/// - Neural network inference via ONNX Runtime
-/// - Async inference with std::future (non-blocking audio thread)
-/// - Outputs frequency-domain amplitudes → synthesized to time-domain audio
-/// - Velocity-sensitive, pitch-wheel responsive
-/// - Natural attack/decay/release envelopes
+class NeuralInferenceScheduler
+{
+public:
+    struct Job
+    {
+        NeuralModel* model = nullptr;
+        MatildaNeuralVoice* voice = nullptr;
+        std::vector<float> input;
+        uint32_t generation = 0;
+    };
+
+    NeuralInferenceScheduler();
+    ~NeuralInferenceScheduler();
+
+    void start();
+    void stop();
+    bool isRunning() const;
+    void beginAudioBlock(int incomingNoteOnEvents);
+    bool tryEnqueue(Job job);
+
+private:
+    class WorkerThread : public juce::Thread
+    {
+    public:
+        explicit WorkerThread(NeuralInferenceScheduler& owner);
+        void run() override;
+
+    private:
+        NeuralInferenceScheduler& owner;
+    };
+
+    void runWorkerLoop();
+
+    WorkerThread worker;
+    std::mutex queueMutex;
+    std::condition_variable queueCondition;
+    std::deque<Job> jobQueue;
+    std::atomic<bool> shouldStop { false };
+    int jobsEnqueuedThisBlock = 0;
+    int maxJobsThisBlock = 32;
+    static constexpr size_t maxQueueSize = 64;
+};
+
 class MatildaNeuralVoice : public juce::SynthesiserVoice
 {
 public:
-    MatildaNeuralVoice(NeuralModel* neuralModel);
-    ~MatildaNeuralVoice() override = default;
+    MatildaNeuralVoice(NeuralModel* neuralModel, NeuralInferenceScheduler* scheduler);
+    ~MatildaNeuralVoice() override;
     
-    // SynthesiserVoice interface
     bool canPlaySound(juce::SynthesiserSound* sound) override;
     void startNote(int midiNoteNumber, float velocity, 
                    juce::SynthesiserSound* sound, 
@@ -37,77 +71,82 @@ public:
                          int startSample, int numSamples) override;
     bool isVoiceActive() const override;
     
-    // ADSR control (called from PluginProcessor)
     void setADSRParameters(float attack, float decay, float sustain, float release);
+    void setSampleRate(double sampleRate);
+
+    void acceptInferenceResult(std::vector<float>&& output, uint32_t generation);
     
 private:
-    // Neural synthesis
+    friend class NeuralInferenceScheduler;
+
     void computeNextSample();
-    void runNeuralInference();
+    void harvestInferenceResults();
+    void launchInference(uint32_t generation, bool force);
+    void updateInferenceInput(float periodCount);
+    void seedDefaultAmplitudes();
+    static void clampAmplitudes(std::vector<float>& amplitudes);
+    static void normalizeAmplitudeEnergy(std::vector<float>& amplitudes, float maxAbsSum);
     
-    // Neural model reference
     NeuralModel* model = nullptr;
+    NeuralInferenceScheduler* scheduler = nullptr;
     
-    // Voice state
     bool isSounding = false;
     bool keyIsDown = false;
     int currentMidiNote = 0;
     float currentVelocity = 0.0f;
-    float currentPitch = 0.0f;  // Normalized 0-1
+    float currentPitch = 0.0f;
     
-    // ADSR envelope
     juce::ADSR adsr;
     juce::ADSR::Parameters adsrParams;
     
-    // Tail-off for release
     float tailOff = 1.0f;
     float tailOffRatio = 0.9997f;
     
-    // Neural inference (async)
-    std::future<void> inferenceTask;
-    std::vector<float> inputVector;      // [pitch, velocity, periodCount]
-    std::vector<float> targetAmplitudes; // Output from neural network
-    std::vector<float> currentAmplitudes; // Smoothly interpolated amplitudes
+    std::atomic<bool> inferenceRunning { false };
+    std::atomic<uint32_t> inferenceGeneration { 0 };
+    int samplesUntilNextInference = 0;
     
-    // Synthesis state
+    std::vector<float> inputVector;
+    std::vector<float> targetAmplitudes;
+    std::vector<float> currentAmplitudes;
+    
+    std::mutex pendingMutex;
+    std::vector<float> pendingAmplitudes;
+    uint32_t pendingGeneration = 0;
+    bool pendingReady = false;
+    
     float sampleRate = 44100.0f;
     long sampleCounter = 0;
-    float period = 0.0f;
+    float period = 1.0f;
     float deltaStep = 0.0f;
     float currentDecay = 1.0f;
     
-    // Stereo phase randomization
     std::vector<float> phasesLeft;
     std::vector<float> phasesRight;
     static std::default_random_engine randomGenerator;
     static std::normal_distribution<float> phaseDistribution;
     
-    // Output buffer
     std::array<float, 2> outputSample = {0.0f, 0.0f};
     
-    // Constants
     static constexpr float MAX_PERIOD_COUNT = 4511.0f;
     static constexpr float DEFAULT_TAIL_OFF_RATIO = 0.9997f;
+    static constexpr int INFERENCE_RELAUNCH_SAMPLES = 4096;
 };
 
-/// NeuralModel - ONNX Runtime wrapper for piano synthesis
-/// 
-/// Manages ONNX session and performs neural network inference
-/// Models are embedded in plugin binary via JUCE BinaryData
 class NeuralModel
 {
 public:
     NeuralModel(const char* modelResourceName = "engineMain");
-    
-    /// Run inference: I (input) → O (output)
     void eval(std::vector<float>& input, std::vector<float>& output);
     
-    // Model shape info
     std::vector<int64_t> inputShape;
     std::vector<int64_t> outputShape;
     
 private:
-    Ort::Session session = Ort::Session{nullptr};
+    Ort::Env env{ORT_LOGGING_LEVEL_WARNING, "MatildaPiano"};
+    Ort::SessionOptions sessionOptions;
+    Ort::Session session{nullptr};
+    std::mutex inferenceMutex;
     std::string inputName;
     std::string outputName;
 };

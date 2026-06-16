@@ -8,10 +8,9 @@ class MatildaNeuralSound : public juce::SynthesiserSound
 public:
     MatildaNeuralSound() = default;
     
-    bool appliesToNote(int midiNoteNumber) override
+    bool appliesToNote(int /*midiNoteNumber*/) override
     {
-        // 88 piano keys: A0 (21) to C8 (108)
-        return (midiNoteNumber >= 21 && midiNoteNumber <= 108);
+        return true;
     }
     
     bool appliesToChannel(int /*midiChannel*/) override

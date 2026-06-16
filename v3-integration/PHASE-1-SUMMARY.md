@@ -88,6 +88,8 @@ v3-integration/
 - **Our approach**: Pure neural for authentic sound
 - **Rationale**: Simpler, more authentic, easier to maintain
 
+> **June 2026 retrospective:** This decision was **not** validated by A/B listening in Matilda — it was a scope/time cut at integration. Post-release GarageBand piano-roll testing and timbre analysis showed gaps. **v4** restores Schuck–Young partial frequencies, ONNX amplitudes only, and optional low-note physical blend. See **`docs/V3-RETROSPECTIVE.md`** and **`docs/version4-prd.md`**. Reference hybrid code remains in `reference-source/Voices.h` (`partialFromMidiKey`, `G1F`/`G2F`/`G3F`).
+
 ### ✅ Manual ONNX Runtime Install
 - **Issue**: Homebrew failing in sandbox (SSL errors)
 - **Solution**: Manual download from GitHub releases
