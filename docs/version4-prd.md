@@ -1,7 +1,7 @@
 # Matilda Piano v4 — Product Requirements
 
-**Status:** Planning  
-**Branch target:** `v4-schuck-young-hybrid` (TBD)  
+**Status:** In development (branch `v4-schuck-young-hybrid`)  
+**Branch target:** `v4-schuck-young-hybrid`  
 **Prior art:** `docs/V3-RETROSPECTIVE.md`, `v3-integration/reference-source/Voices.h`
 
 ---
@@ -156,3 +156,7 @@ When fundamental or blend coefficients change mid-note, interpolate over a few m
 - `CASE-STUDY.md` — Part 10 (post-release reality)
 - `v3-integration/reference-source/Voices.h` — `partialFromMidiKey`, physical tables
 - `v3-integration/PHASE-1-SUMMARY.md` — original pure-neural decision
+
+
+## 8. Latest figma link to updated design(primarily for knobs, and label changes):
+https://www.figma.com/design/jdsiHSEmMSTHUkDlgKSiod/AdMaker-CMS?node-id=5033-96191&t=PWZt0nNnToYRvHvy-4
