@@ -138,6 +138,51 @@ static int runFirstNotePeakTest()
     return 0;
 }
 
+static int runChordRenderTest()
+{
+    MatildaPianoAudioProcessor processor;
+    processor.prepareToPlay(44100.0, 512);
+    juce::AudioBuffer<float> buffer(2, 512);
+    float maxPeak = 0.0f;
+
+    for (int block = 0; block < 120; ++block)
+    {
+        buffer.clear();
+        juce::MidiBuffer midi;
+        if (block == 0)
+        {
+            midi.addEvent(juce::MidiMessage::noteOn(1, 60, (juce::uint8) 100), 0);
+            midi.addEvent(juce::MidiMessage::noteOn(1, 64, (juce::uint8) 100), 0);
+            midi.addEvent(juce::MidiMessage::noteOn(1, 67, (juce::uint8) 100), 0);
+        }
+        if (block == 90)
+        {
+            midi.addEvent(juce::MidiMessage::noteOff(1, 60), 0);
+            midi.addEvent(juce::MidiMessage::noteOff(1, 64), 0);
+            midi.addEvent(juce::MidiMessage::noteOff(1, 67), 0);
+        }
+
+        processor.processBlock(buffer, midi);
+        const float blockPeak = juce::jmax(buffer.getMagnitude(0, 512), buffer.getMagnitude(1, 512));
+        maxPeak = juce::jmax(maxPeak, blockPeak);
+        if (blockPeak > 1.02f)
+        {
+            std::cerr << "FAIL chord block peak spike " << blockPeak << " at block " << block << "\n";
+            processor.releaseResources();
+            return 1;
+        }
+    }
+
+    processor.releaseResources();
+    if (maxPeak < 0.0001f)
+    {
+        std::cerr << "FAIL chord render silence maxPeak=" << maxPeak << "\n";
+        return 1;
+    }
+    std::cout << "Chord max peak: " << maxPeak << "\n";
+    return 0;
+}
+
 static int runDenseMidiRenderTest()
 {
     MatildaPianoAudioProcessor processor;
@@ -230,6 +275,7 @@ int main(int argc, char* argv[])
     failed += runParameterLayoutTests();
     failed += runSchuckYoungPartialTest();
     failed += runFirstNotePeakTest();
+    failed += runChordRenderTest();
     failed += runMidiRenderTest();
     failed += runDenseMidiRenderTest();
     failed += runOutOfRangeNoteTest();

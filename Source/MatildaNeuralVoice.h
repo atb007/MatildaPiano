@@ -31,6 +31,7 @@ public:
     bool isRunning() const;
     void beginAudioBlock(int incomingNoteOnEvents);
     bool tryEnqueue(Job job);
+    bool tryClaimInferenceHarvest();
 
 private:
     class WorkerThread : public juce::Thread
@@ -52,13 +53,15 @@ private:
     std::atomic<bool> shouldStop { false };
     int jobsEnqueuedThisBlock = 0;
     int maxJobsThisBlock = 32;
+    int inferenceHarvestsThisBlock = 0;
+    static constexpr int maxInferenceHarvestsPerBlock = 1;
     static constexpr size_t maxQueueSize = 64;
 };
 
 class MatildaNeuralVoice : public juce::SynthesiserVoice
 {
 public:
-    MatildaNeuralVoice(NeuralModel* neuralModel, NeuralInferenceScheduler* scheduler);
+    MatildaNeuralVoice(NeuralModel* neuralModel, NeuralInferenceScheduler* scheduler, int voiceIndexIn);
     ~MatildaNeuralVoice() override;
     
     bool canPlaySound(juce::SynthesiserSound* sound) override;
@@ -77,6 +80,7 @@ public:
     void setInharmonicity(float normalized01);
     void setPerformanceMorph(float hardness01, float cabinetResonance01);
     void setSustainPedalDown(bool isDown);
+    void setPolyphonicDensity(int estimatedActiveVoices);
 
     int getCurrentMidiNote() const { return currentMidiNote; }
     void acceptInferenceResult(std::vector<float>&& output, uint32_t generation);
@@ -97,6 +101,8 @@ private:
     
     NeuralModel* model = nullptr;
     NeuralInferenceScheduler* scheduler = nullptr;
+    int voiceIndex = 0;
+    int polyphonicDensity = 1;
     
     bool isSounding = false;
     bool keyIsDown = false;
@@ -153,8 +159,9 @@ private:
     static constexpr float MAX_PERIOD_COUNT = 4511.0f;
     static constexpr float DEFAULT_TAIL_OFF_RATIO = 0.9997f;
     static constexpr int INFERENCE_RELAUNCH_SAMPLES = 4096;
-    static constexpr int INFERENCE_HANDOFF_DELAY_SAMPLES = 2048;
-    static constexpr int INFERENCE_BLEND_RAMP_SAMPLES = 8192;
+    static constexpr int INFERENCE_HANDOFF_DELAY_SAMPLES = 4096;
+    static constexpr int INFERENCE_HANDOFF_STAGGER_SAMPLES = 2048;
+    static constexpr int INFERENCE_BLEND_RAMP_SAMPLES = 12288;
 };
 
 class NeuralModel

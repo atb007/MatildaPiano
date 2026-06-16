@@ -53,7 +53,16 @@ void NeuralInferenceScheduler::beginAudioBlock(int incomingNoteOnEvents)
 {
     juce::ignoreUnused(incomingNoteOnEvents);
     jobsEnqueuedThisBlock = 0;
+    inferenceHarvestsThisBlock = 0;
     maxJobsThisBlock = 32;
+}
+
+bool NeuralInferenceScheduler::tryClaimInferenceHarvest()
+{
+    if (inferenceHarvestsThisBlock >= maxInferenceHarvestsPerBlock)
+        return false;
+    ++inferenceHarvestsThisBlock;
+    return true;
 }
 
 bool NeuralInferenceScheduler::tryEnqueue(Job job)
@@ -177,8 +186,9 @@ void NeuralModel::eval(std::vector<float>& input, std::vector<float>& output)
     );
 }
 
-MatildaNeuralVoice::MatildaNeuralVoice(NeuralModel* neuralModel, NeuralInferenceScheduler* inferenceScheduler)
-    : model(neuralModel), scheduler(inferenceScheduler)
+MatildaNeuralVoice::MatildaNeuralVoice(NeuralModel* neuralModel, NeuralInferenceScheduler* inferenceScheduler,
+                                       int voiceIndexIn)
+    : model(neuralModel), scheduler(inferenceScheduler), voiceIndex(voiceIndexIn)
 {
     jassert(model != nullptr);
     
@@ -257,9 +267,10 @@ void MatildaNeuralVoice::recomputePartialPhaseIncrements(bool force)
 
 void MatildaNeuralVoice::seedDefaultAmplitudes()
 {
+    const float densityScale = 1.0f / std::sqrt(static_cast<float>(juce::jmax(1, polyphonicDensity)));
     for (size_t i = 0; i < targetAmplitudes.size(); ++i)
     {
-        const float amplitude = std::exp(-0.02f * static_cast<float>(i)) * 0.12f * currentVelocity;
+        const float amplitude = std::exp(-0.02f * static_cast<float>(i)) * 0.10f * currentVelocity * densityScale;
         targetAmplitudes[i] = amplitude;
         currentAmplitudes[i] = amplitude;
     }
@@ -312,7 +323,12 @@ void MatildaNeuralVoice::acceptInferenceResult(std::vector<float>&& output, uint
 
 void MatildaNeuralVoice::harvestInferenceResults()
 {
-    if (samplesSinceNoteOn < INFERENCE_HANDOFF_DELAY_SAMPLES)
+    const int handoffDelay = INFERENCE_HANDOFF_DELAY_SAMPLES
+                           + voiceIndex * INFERENCE_HANDOFF_STAGGER_SAMPLES;
+    if (samplesSinceNoteOn < handoffDelay)
+        return;
+
+    if (scheduler != nullptr && !scheduler->tryClaimInferenceHarvest())
         return;
 
     std::lock_guard<std::mutex> lock(pendingMutex);
@@ -321,12 +337,13 @@ void MatildaNeuralVoice::harvestInferenceResults()
 
     const size_t partialLimit = juce::jmin(pendingAmplitudes.size(), currentAmplitudes.size());
     const float currentEnergy = amplitudeAbsSum(currentAmplitudes, partialLimit);
-    normalizeAmplitudeEnergy(pendingAmplitudes, juce::jmax(0.35f, currentEnergy * 1.15f));
+    const float densityScale = 1.0f / std::sqrt(static_cast<float>(juce::jmax(1, polyphonicDensity)));
+    normalizeAmplitudeEnergy(pendingAmplitudes, juce::jmax(0.25f, currentEnergy * 1.05f) * densityScale);
 
     const float ramp = juce::jlimit(0.0f, 1.0f,
-        static_cast<float>(samplesSinceNoteOn - INFERENCE_HANDOFF_DELAY_SAMPLES)
+        static_cast<float>(samplesSinceNoteOn - handoffDelay)
             / static_cast<float>(INFERENCE_BLEND_RAMP_SAMPLES));
-    const float blend = 0.03f + ramp * 0.22f;
+    const float blend = (0.015f + ramp * 0.12f) * densityScale;
 
     for (size_t i = 0; i < partialLimit; ++i)
     {
@@ -334,7 +351,7 @@ void MatildaNeuralVoice::harvestInferenceResults()
             + (pendingAmplitudes[i] - currentAmplitudes[i]) * blend;
     }
 
-    normalizeAmplitudeEnergy(targetAmplitudes, juce::jmax(0.4f, currentEnergy * 1.2f));
+    normalizeAmplitudeEnergy(targetAmplitudes, juce::jmax(0.3f, currentEnergy * 1.08f) * densityScale);
     pendingReady = false;
 }
 
@@ -372,6 +389,11 @@ void MatildaNeuralVoice::setSustainPedalDown(bool isDown)
     sustainPedalDown = isDown;
 }
 
+void MatildaNeuralVoice::setPolyphonicDensity(int estimatedActiveVoices)
+{
+    polyphonicDensity = juce::jmax(1, estimatedActiveVoices);
+}
+
 void MatildaNeuralVoice::setSampleRate(double sr)
 {
     sampleRate = juce::jmax(1.0f, static_cast<float>(sr));
@@ -389,7 +411,7 @@ void MatildaNeuralVoice::startNote(int midiNoteNumber, float velocity,
     isSounding = true;
     keyIsDown = true;
     currentMidiNote = midiNoteNumber;
-    currentVelocity = juce::jmax(0.05f, juce::jlimit(0.0f, 1.0f, velocity));
+    currentVelocity = juce::jmax(0.05f, juce::jlimit(0.0f, 0.65f, velocity));
     
     currentPitch = juce::jlimit(0.0f, 1.0f, (currentMidiNote - 21.0f) / 87.0f);
     
@@ -552,8 +574,9 @@ void MatildaNeuralVoice::computeNextSample()
         outputSample[1] += currentAmplitudes[i] * std::sin(phasesRight[i] + partialStep);
     }
 
-    const float physicalWeight = PhysicalBlend::neuralBlendWeight(
-        currentPitch, cabinetResonance, sustainPedalDown);
+    const float physicalWeight = (polyphonicDensity > 1)
+        ? 0.0f
+        : PhysicalBlend::neuralBlendWeight(currentPitch, cabinetResonance, sustainPedalDown);
     if (physicalWeight > 0.001f)
     {
         const float physicalL = computePhysicalBlendSample(0);
@@ -564,8 +587,8 @@ void MatildaNeuralVoice::computeNextSample()
         ++physicalTimeStep;
     }
     
-    outputSample[0] *= envelope * 0.5f;
-    outputSample[1] *= envelope * 0.5f;
+    outputSample[0] *= envelope * 0.42f;
+    outputSample[1] *= envelope * 0.42f;
 
     outputSample[0] = std::tanh(outputSample[0]);
     outputSample[1] = std::tanh(outputSample[1]);

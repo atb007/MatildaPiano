@@ -80,7 +80,7 @@ private:
     double currentSampleRate = 44100.0;
 
     juce::String neuralModelStatus_;
-    std::array<bool, 128> keyWasDown = {};
+    std::array<uint8_t, 128> heldNoteVelocities {};
     bool hostWasPlaying = false;
     bool sustainPedalDown = false;
     double lastHostTempo = 120.0;

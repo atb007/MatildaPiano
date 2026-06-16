@@ -23,6 +23,16 @@ void sanitizeBuffer(juce::AudioBuffer<float>& buffer)
         }
     }
 }
+
+void applyEmergencyPeakLimit(juce::AudioBuffer<float>& buffer, float maxPeak = 0.85f)
+{
+    const float peak = buffer.getMagnitude(0, buffer.getNumSamples());
+    const float peakR = buffer.getNumChannels() > 1
+        ? juce::jmax(peak, buffer.getMagnitude(1, 0, buffer.getNumSamples()))
+        : peak;
+    if (peakR > maxPeak && peakR > 0.0f)
+        buffer.applyGain(maxPeak / peakR);
+}
 } // namespace
 
 MatildaPianoAudioProcessor::MatildaPianoAudioProcessor()
@@ -46,7 +56,7 @@ MatildaPianoAudioProcessor::MatildaPianoAudioProcessor()
         
         // Create voices with neural model reference
         for (int i = 0; i < numVoices; ++i)
-            synth.addVoice(new MatildaNeuralVoice(neuralModel.get(), &inferenceScheduler));
+            synth.addVoice(new MatildaNeuralVoice(neuralModel.get(), &inferenceScheduler, i));
         
         setupNeuralEngine();
     }
@@ -208,6 +218,7 @@ void MatildaPianoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (hostIsPlaying && !hostWasPlaying)
     {
         synth.allNotesOff(0, true);
+        heldNoteVelocities.fill(0);
         tapeModule.reset();
         delayModule.reset();
         reverbModule.reset();
@@ -215,19 +226,7 @@ void MatildaPianoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     hostWasPlaying = hostIsPlaying;
 
-    const int midiChannel = 1;
-    for (int note = 0; note < 128; ++note)
-    {
-        const bool nowOn = keyboardState.isNoteOn(midiChannel, note);
-        if (nowOn != keyWasDown[note])
-        {
-            keyWasDown[note] = nowOn;
-            if (nowOn)
-                midiMessages.addEvent(juce::MidiMessage::noteOn(midiChannel, note, (juce::uint8) 100), 0);
-            else
-                midiMessages.addEvent(juce::MidiMessage::noteOff(midiChannel, note), 0);
-        }
-    }
+    keyboardState.processNextMidiBuffer(midiMessages, 0, buffer.getNumSamples(), true);
 
     juce::MidiBuffer synthMidi;
     for (const auto metadata : midiMessages)
@@ -239,7 +238,10 @@ void MatildaPianoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             if (message.getControllerNumber() == 64)
                 sustainPedalDown = message.getControllerValue() >= 64;
             else if (message.getControllerNumber() == 123)
+            {
                 synth.allNotesOff(0, true);
+                heldNoteVelocities.fill(0);
+            }
             synthMidi.addEvent(message, metadata.samplePosition);
             continue;
         }
@@ -259,14 +261,20 @@ void MatildaPianoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             const int velocity = message.getVelocity();
             if (velocity == 0)
             {
+                if (heldNoteVelocities[static_cast<size_t>(transposedNote)] == 0)
+                    continue;
+                heldNoteVelocities[static_cast<size_t>(transposedNote)] = 0;
                 synthMidi.addEvent(juce::MidiMessage::noteOff(message.getChannel(), transposedNote,
                                                               message.getVelocity()),
                                    metadata.samplePosition);
             }
             else
             {
-                const int cappedVel = juce::jlimit(1, 100,
-                    static_cast<int>(velocity * 0.85f));
+                if (heldNoteVelocities[static_cast<size_t>(transposedNote)] > 0)
+                    continue;
+                const int cappedVel = juce::jlimit(1, 83,
+                    static_cast<int>(velocity * 0.65f));
+                heldNoteVelocities[static_cast<size_t>(transposedNote)] = static_cast<uint8_t>(cappedVel);
                 synthMidi.addEvent(juce::MidiMessage::noteOn(message.getChannel(), transposedNote,
                                                              (juce::uint8) cappedVel),
                                    metadata.samplePosition);
@@ -274,10 +282,20 @@ void MatildaPianoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
         else
         {
+            if (heldNoteVelocities[static_cast<size_t>(transposedNote)] == 0)
+                continue;
+            heldNoteVelocities[static_cast<size_t>(transposedNote)] = 0;
             synthMidi.addEvent(juce::MidiMessage::noteOff(message.getChannel(), transposedNote,
                                                           message.getVelocity()),
                                metadata.samplePosition);
         }
+    }
+
+    int activeVoicesBeforeRender = 0;
+    for (int i = 0; i < synth.getNumVoices(); ++i)
+    {
+        if (synth.getVoice(i)->isVoiceActive())
+            ++activeVoicesBeforeRender;
     }
 
     int incomingNoteOnEvents = 0;
@@ -287,9 +305,19 @@ void MatildaPianoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         if (msg.isNoteOn() && msg.getVelocity() > 0)
             ++incomingNoteOnEvents;
     }
+
+    const int estimatedPolyphony = activeVoicesBeforeRender + incomingNoteOnEvents;
+    for (int i = 0; i < synth.getNumVoices(); ++i)
+    {
+        if (auto* voice = dynamic_cast<MatildaNeuralVoice*>(synth.getVoice(i)))
+            voice->setPolyphonicDensity(estimatedPolyphony);
+    }
+
     inferenceScheduler.beginAudioBlock(incomingNoteOnEvents);
 
     synth.renderNextBlock(buffer, synthMidi, 0, buffer.getNumSamples());
+
+    applyEmergencyPeakLimit(buffer);
 
     int activeVoices = 0;
     for (int i = 0; i < synth.getNumVoices(); ++i)
