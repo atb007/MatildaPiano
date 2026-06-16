@@ -212,30 +212,9 @@ void MatildaPianoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         delayModule.reset();
         reverbModule.reset();
     }
-    else if (!hostIsPlaying && hostWasPlaying)
-    {
-        synth.allNotesOff(0, true);
-    }
 
     hostWasPlaying = hostIsPlaying;
 
-    // Host MIDI at concert pitch; on-screen keyboard gets +12 (UI label offset from UI-UPDATES.md).
-    juce::MidiBuffer synthMidi;
-    synthMidi.addEvents(midiMessages, 0, -1, 0);
-
-    for (const auto metadata : synthMidi)
-    {
-        const auto& msg = metadata.getMessage();
-        if (msg.isController())
-        {
-            if (msg.getControllerNumber() == 64)
-                sustainPedalDown = msg.getControllerValue() >= 64;
-            else if (msg.getControllerNumber() == 123)
-                synth.allNotesOff(msg.getChannel(), true);
-        }
-    }
-
-    handleUnmatchedNoteOffs(synthMidi);
     const int midiChannel = 1;
     for (int note = 0; note < 128; ++note)
     {
@@ -243,20 +222,69 @@ void MatildaPianoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         if (nowOn != keyWasDown[note])
         {
             keyWasDown[note] = nowOn;
-            const int transposedNote = note + 12;
-            if (transposedNote > 127)
-                continue;
             if (nowOn)
-                synthMidi.addEvent(juce::MidiMessage::noteOn(midiChannel, transposedNote, (juce::uint8)100), 0);
+                midiMessages.addEvent(juce::MidiMessage::noteOn(midiChannel, note, (juce::uint8) 100), 0);
             else
-                synthMidi.addEvent(juce::MidiMessage::noteOff(midiChannel, transposedNote), 0);
+                midiMessages.addEvent(juce::MidiMessage::noteOff(midiChannel, note), 0);
+        }
+    }
+
+    juce::MidiBuffer synthMidi;
+    for (const auto metadata : midiMessages)
+    {
+        const auto message = metadata.getMessage();
+
+        if (message.isController())
+        {
+            if (message.getControllerNumber() == 64)
+                sustainPedalDown = message.getControllerValue() >= 64;
+            else if (message.getControllerNumber() == 123)
+                synth.allNotesOff(0, true);
+            synthMidi.addEvent(message, metadata.samplePosition);
+            continue;
+        }
+
+        if (!message.isNoteOnOrOff())
+        {
+            synthMidi.addEvent(message, metadata.samplePosition);
+            continue;
+        }
+
+        const int transposedNote = message.getNoteNumber() + 12;
+        if (transposedNote < 0 || transposedNote > 127)
+            continue;
+
+        if (message.isNoteOn())
+        {
+            const int velocity = message.getVelocity();
+            if (velocity == 0)
+            {
+                synthMidi.addEvent(juce::MidiMessage::noteOff(message.getChannel(), transposedNote,
+                                                              message.getVelocity()),
+                                   metadata.samplePosition);
+            }
+            else
+            {
+                const int cappedVel = juce::jlimit(1, 100,
+                    static_cast<int>(velocity * 0.85f));
+                synthMidi.addEvent(juce::MidiMessage::noteOn(message.getChannel(), transposedNote,
+                                                             (juce::uint8) cappedVel),
+                                   metadata.samplePosition);
+            }
+        }
+        else
+        {
+            synthMidi.addEvent(juce::MidiMessage::noteOff(message.getChannel(), transposedNote,
+                                                          message.getVelocity()),
+                               metadata.samplePosition);
         }
     }
 
     int incomingNoteOnEvents = 0;
     for (const auto metadata : synthMidi)
     {
-        if (metadata.getMessage().isNoteOn())
+        const auto& msg = metadata.getMessage();
+        if (msg.isNoteOn() && msg.getVelocity() > 0)
             ++incomingNoteOnEvents;
     }
     inferenceScheduler.beginAudioBlock(incomingNoteOnEvents);
@@ -335,52 +363,6 @@ void MatildaPianoAudioProcessor::setupNeuralEngine()
 {
     synth.clearSounds();
     synth.addSound(new MatildaNeuralSound());
-}
-
-void MatildaPianoAudioProcessor::handleUnmatchedNoteOffs(juce::MidiBuffer& midiMessages)
-{
-    std::array<bool, 128> noteOffRequested {};
-    for (const auto metadata : midiMessages)
-    {
-        const auto& msg = metadata.getMessage();
-        if (msg.isNoteOff())
-            noteOffRequested[msg.getNoteNumber()] = true;
-    }
-
-    for (int note = 0; note < 128; ++note)
-    {
-        if (!noteOffRequested[note])
-            continue;
-
-        bool voicePlayingNote = false;
-        for (int i = 0; i < synth.getNumVoices(); ++i)
-        {
-            if (auto* voice = dynamic_cast<MatildaNeuralVoice*>(synth.getVoice(i)))
-            {
-                if (voice->isVoiceActive() && voice->getCurrentMidiNote() == note)
-                {
-                    voicePlayingNote = true;
-                    break;
-                }
-            }
-        }
-
-        if (!voicePlayingNote)
-        {
-            juce::Array<int> activeNotes;
-            for (int i = 0; i < synth.getNumVoices(); ++i)
-            {
-                if (auto* voice = dynamic_cast<MatildaNeuralVoice*>(synth.getVoice(i)))
-                {
-                    if (voice->isVoiceActive())
-                        activeNotes.addIfNotAlreadyThere(voice->getCurrentMidiNote());
-                }
-            }
-
-            if (activeNotes.size() == 1)
-                synth.noteOff(1, activeNotes[0], 0.0f, true);
-        }
-    }
 }
 
 void MatildaPianoAudioProcessor::updateParameters()

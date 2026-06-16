@@ -87,7 +87,6 @@ private:
     float smoothedSynthBusGain = 0.4f;
 
     void updateParameters();
-    void handleUnmatchedNoteOffs(juce::MidiBuffer& midiMessages);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MatildaPianoAudioProcessor)
 };

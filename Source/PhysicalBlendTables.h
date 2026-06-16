@@ -48,8 +48,6 @@ namespace PhysicalBlend
     {
         const float alpha = 1.0f - (1.0f - normalizedPitch) * 0.95f;
         const float physicalWeight = (1.0f - alpha) * (0.35f + cabinetResonance01 * 0.65f);
-        if (sustainPedalDown)
-            return juce::jlimit(0.0f, 0.85f, physicalWeight * 1.25f);
-        return juce::jlimit(0.0f, 0.75f, physicalWeight);
+        return juce::jlimit(0.0f, 0.45f, physicalWeight);
     }
 }

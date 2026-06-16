@@ -125,8 +125,9 @@ When fundamental or blend coefficients change mid-note, interpolate over a few m
 
 ### 4.5 Host vs on-screen keyboard
 
-- **Host MIDI:** concert pitch, no transpose
-- **On-screen keyboard / Musical Typing:** +12 semitones (preserve v3 fix)
+- **Unified +12 transpose** on all note-on/off after merging host MIDI and on-screen keyboard (matches commit `72a9237` live-play behaviour)
+- Keyboard merged first at raw note numbers, then transposed once — avoids split-path octave bugs
+- **Vital pattern:** note-on with velocity 0 treated as note-off (`midi_manager.cpp`)
 
 ---
 
