@@ -12,7 +12,7 @@ if(DEFINED JUCE_DIR AND JUCE_DIR AND NOT EXISTS "${JUCE_DIR}/JUCEConfig.cmake")
 endif()
 
 # C and CXX: JUCE subprojects may use C, so both are required (fixes CMAKE_C_COMPILE_OBJECT missing).
-project(MatildaPiano VERSION 3.0.0 LANGUAGES C CXX)
+project(MatildaPiano VERSION 4.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,12 +37,12 @@ endif()
 juce_add_plugin(MatildaPiano
     COMPANY_NAME "MatildaAudio"
     PLUGIN_MANUFACTURER_CODE MatA
-    PLUGIN_CODE MtP3
+    PLUGIN_CODE MtP4
     FORMATS AU VST3 Standalone
     VST3_CATEGORIES Instrument Synth
-    PRODUCT_NAME "Matilda Piano 3"
-    DESCRIPTION "Matilda Piano — neural network synthesis (v3)"
-    VERSION 3.0.0
+    PRODUCT_NAME "Matilda Piano 4"
+    DESCRIPTION "Matilda Piano — Schuck–Young hybrid neural synthesis (v4)"
+    VERSION 4.0.0
     PLUGIN_MANUFACTURER "Matilda Audio"
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
@@ -62,6 +62,8 @@ target_sources(MatildaPiano PRIVATE
     Source/Parameters.cpp
     Source/MatildaNeuralVoice.cpp
     Source/MatildaNeuralSound.cpp
+    Source/SchuckYoungPartials.h
+    Source/PhysicalBlendTables.h
     Source/TapeModule.cpp
     Source/DelayModule.cpp
     Source/ReverbModule.cpp
@@ -142,8 +144,8 @@ endif()
 if(APPLE)
     set_target_properties(MatildaPiano PROPERTIES
         OSX_ARCHITECTURES "arm64;x86_64"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.matildaaudio.matildapiano3"
-        MACOSX_BUNDLE_BUNDLE_NAME "Matilda Piano 3"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.matildaaudio.matildapiano4"
+        MACOSX_BUNDLE_BUNDLE_NAME "Matilda Piano 4"
     )
     
     # Set minimum macOS version
@@ -183,6 +185,8 @@ target_sources(MatildaPianoTests PRIVATE
     Source/PluginEditor.cpp
     Source/MatildaNeuralVoice.cpp
     Source/MatildaNeuralSound.cpp
+    Source/SchuckYoungPartials.h
+    Source/PhysicalBlendTables.h
     Source/TapeModule.cpp
     Source/DelayModule.cpp
     Source/ReverbModule.cpp
@@ -202,7 +206,7 @@ else()
     target_compile_definitions(MatildaPianoTests PRIVATE MATILDA_HAS_BINARY_DATA=0)
 endif()
 target_compile_definitions(MatildaPianoTests PRIVATE
-    JucePlugin_Name="Matilda Piano 3"
+    JucePlugin_Name="Matilda Piano 4"
     JucePlugin_IsMidiEffect=0
     JucePlugin_IsSynth=1
     JucePlugin_WantsMidiInput=1

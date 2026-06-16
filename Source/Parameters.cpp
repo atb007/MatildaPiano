@@ -20,7 +20,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Parameters::createParameterL
     ));
     
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        SUSTAIN, "Sustain",
+        SUSTAIN, "Velocity",
         juce::NormalisableRange<float>(SUSTAIN_MIN, SUSTAIN_MAX, 0.01f),
         SUSTAIN_DEFAULT,
         ""
@@ -41,6 +41,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout Parameters::createParameterL
         ""
     ));
     
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        INHARMONICITY, "Inharmonicity",
+        juce::NormalisableRange<float>(INHARMONICITY_MIN, INHARMONICITY_MAX, 0.01f),
+        INHARMONICITY_DEFAULT,
+        ""
+    ));
+
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         DELAY_TIME, "Delay Time",
         juce::NormalisableRange<float>(DELAY_TIME_MIN, DELAY_TIME_MAX, 0.01f),

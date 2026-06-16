@@ -11,6 +11,7 @@ namespace Parameters
     constexpr const char* RELEASE = "release";
     
     constexpr const char* REVERB = "reverb";
+    constexpr const char* INHARMONICITY = "inharmonicity";
     constexpr const char* DELAY_TIME = "delayTime";
     constexpr const char* MASTER_VOL = "masterVol";
     
@@ -37,6 +38,10 @@ namespace Parameters
     constexpr float REVERB_MIN = 0.0f;
     constexpr float REVERB_MAX = 1.0f;
     constexpr float REVERB_DEFAULT = 0.3f;
+
+    constexpr float INHARMONICITY_MIN = 0.0f;
+    constexpr float INHARMONICITY_MAX = 1.0f;
+    constexpr float INHARMONICITY_DEFAULT = 0.5f;
     
     constexpr float DELAY_TIME_MIN = 0.0f;
     constexpr float DELAY_TIME_MAX = 1.0f;

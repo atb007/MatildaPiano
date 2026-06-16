@@ -223,6 +223,19 @@ void MatildaPianoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     juce::MidiBuffer synthMidi;
     synthMidi.addEvents(midiMessages, 0, -1, 0);
 
+    for (const auto metadata : synthMidi)
+    {
+        const auto& msg = metadata.getMessage();
+        if (msg.isController())
+        {
+            if (msg.getControllerNumber() == 64)
+                sustainPedalDown = msg.getControllerValue() >= 64;
+            else if (msg.getControllerNumber() == 123)
+                synth.allNotesOff(msg.getChannel(), true);
+        }
+    }
+
+    handleUnmatchedNoteOffs(synthMidi);
     const int midiChannel = 1;
     for (int note = 0; note < 128; ++note)
     {
@@ -324,6 +337,52 @@ void MatildaPianoAudioProcessor::setupNeuralEngine()
     synth.addSound(new MatildaNeuralSound());
 }
 
+void MatildaPianoAudioProcessor::handleUnmatchedNoteOffs(juce::MidiBuffer& midiMessages)
+{
+    std::array<bool, 128> noteOffRequested {};
+    for (const auto metadata : midiMessages)
+    {
+        const auto& msg = metadata.getMessage();
+        if (msg.isNoteOff())
+            noteOffRequested[msg.getNoteNumber()] = true;
+    }
+
+    for (int note = 0; note < 128; ++note)
+    {
+        if (!noteOffRequested[note])
+            continue;
+
+        bool voicePlayingNote = false;
+        for (int i = 0; i < synth.getNumVoices(); ++i)
+        {
+            if (auto* voice = dynamic_cast<MatildaNeuralVoice*>(synth.getVoice(i)))
+            {
+                if (voice->isVoiceActive() && voice->getCurrentMidiNote() == note)
+                {
+                    voicePlayingNote = true;
+                    break;
+                }
+            }
+        }
+
+        if (!voicePlayingNote)
+        {
+            juce::Array<int> activeNotes;
+            for (int i = 0; i < synth.getNumVoices(); ++i)
+            {
+                if (auto* voice = dynamic_cast<MatildaNeuralVoice*>(synth.getVoice(i)))
+                {
+                    if (voice->isVoiceActive())
+                        activeNotes.addIfNotAlreadyThere(voice->getCurrentMidiNote());
+                }
+            }
+
+            if (activeNotes.size() == 1)
+                synth.noteOff(1, activeNotes[0], 0.0f, true);
+        }
+    }
+}
+
 void MatildaPianoAudioProcessor::updateParameters()
 {
     // Update ADSR for all voices
@@ -331,19 +390,22 @@ void MatildaPianoAudioProcessor::updateParameters()
     float decay = valueTreeState.getRawParameterValue(Parameters::DECAY)->load();
     float sustain = valueTreeState.getRawParameterValue(Parameters::SUSTAIN)->load();
     float release = valueTreeState.getRawParameterValue(Parameters::RELEASE)->load();
+    const float inharmonicity = valueTreeState.getRawParameterValue(Parameters::INHARMONICITY)->load();
+    const float xyX = valueTreeState.getRawParameterValue(Parameters::XY_X)->load();
+    const float xyY = valueTreeState.getRawParameterValue(Parameters::XY_Y)->load();
     
     for (int i = 0; i < synth.getNumVoices(); ++i)
     {
         if (auto* voice = dynamic_cast<MatildaNeuralVoice*>(synth.getVoice(i)))
         {
             voice->setADSRParameters(attack, decay, sustain, release);
+            voice->setInharmonicity(inharmonicity);
+            voice->setPerformanceMorph(xyX, xyY);
+            voice->setSustainPedalDown(sustainPedalDown);
         }
     }
     
     // Update tape module (XY pad)
-    float xyX = valueTreeState.getRawParameterValue(Parameters::XY_X)->load();
-    float xyY = valueTreeState.getRawParameterValue(Parameters::XY_Y)->load();
-    
     tapeModule.setWowFlutterRate(xyX);
     tapeModule.setSaturation(xyY);
     tapeModule.setToneCutoff(1.0f - xyY * 0.5f); // Darker as Y increases

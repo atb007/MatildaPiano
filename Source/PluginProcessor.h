@@ -82,10 +82,12 @@ private:
     juce::String neuralModelStatus_;
     std::array<bool, 128> keyWasDown = {};
     bool hostWasPlaying = false;
+    bool sustainPedalDown = false;
     double lastHostTempo = 120.0;
     float smoothedSynthBusGain = 0.4f;
 
     void updateParameters();
+    void handleUnmatchedNoteOffs(juce::MidiBuffer& midiMessages);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MatildaPianoAudioProcessor)
 };

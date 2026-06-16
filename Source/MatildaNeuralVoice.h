@@ -7,6 +7,7 @@
 #include <random>
 #include <vector>
 #include <onnxruntime_cxx_api.h>
+#include "SchuckYoungPartials.h"
 
 class NeuralModel;
 class MatildaNeuralVoice;
@@ -73,7 +74,11 @@ public:
     
     void setADSRParameters(float attack, float decay, float sustain, float release);
     void setSampleRate(double sampleRate);
+    void setInharmonicity(float normalized01);
+    void setPerformanceMorph(float hardness01, float cabinetResonance01);
+    void setSustainPedalDown(bool isDown);
 
+    int getCurrentMidiNote() const { return currentMidiNote; }
     void acceptInferenceResult(std::vector<float>&& output, uint32_t generation);
     
 private:
@@ -84,8 +89,11 @@ private:
     void launchInference(uint32_t generation, bool force);
     void updateInferenceInput(float periodCount);
     void seedDefaultAmplitudes();
+    void recomputePartialPhaseIncrements(bool force);
+    float computePhysicalBlendSample(int channelIndex);
     static void clampAmplitudes(std::vector<float>& amplitudes);
     static void normalizeAmplitudeEnergy(std::vector<float>& amplitudes, float maxAbsSum);
+    static float amplitudeAbsSum(const std::vector<float>& amplitudes, size_t count);
     
     NeuralModel* model = nullptr;
     NeuralInferenceScheduler* scheduler = nullptr;
@@ -117,9 +125,23 @@ private:
     
     float sampleRate = 44100.0f;
     long sampleCounter = 0;
+    long samplesSinceNoteOn = 0;
     float period = 1.0f;
     float deltaStep = 0.0f;
     float currentDecay = 1.0f;
+    float inharmonicityBeta = SchuckYoung::kReferenceBeta;
+    float targetInharmonicityBeta = SchuckYoung::kReferenceBeta;
+    float hardnessMorph = 0.5f;
+    float cabinetResonance = 0.5f;
+    bool sustainPedalDown = false;
+    int activePartialCount = 30;
+    std::vector<float> partialPhaseIncrements;
+    float physicalPhaseScale = 0.0f;
+    size_t physicalTimeStep = 0;
+    std::vector<float> physicalHarmonics;
+    std::vector<float> physicalAmplitudes;
+    std::vector<float> physicalPhasesLeft;
+    std::vector<float> physicalPhasesRight;
     
     std::vector<float> phasesLeft;
     std::vector<float> phasesRight;
@@ -131,6 +153,8 @@ private:
     static constexpr float MAX_PERIOD_COUNT = 4511.0f;
     static constexpr float DEFAULT_TAIL_OFF_RATIO = 0.9997f;
     static constexpr int INFERENCE_RELAUNCH_SAMPLES = 4096;
+    static constexpr int INFERENCE_HANDOFF_DELAY_SAMPLES = 2048;
+    static constexpr int INFERENCE_BLEND_RAMP_SAMPLES = 8192;
 };
 
 class NeuralModel

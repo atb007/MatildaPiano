@@ -6,6 +6,7 @@
 #include <JuceHeader.h>
 #include "../Source/Parameters.h"
 #include "../Source/PluginProcessor.h"
+#include "../Source/SchuckYoungPartials.h"
 #include <cstdlib>
 #include <iostream>
 
@@ -17,19 +18,19 @@ static int runParameterLayoutTests()
     MatildaPianoAudioProcessor processor;
     const auto& params = processor.getParameters();
 
-    // Expected parameter count (ADSR=4, Reverb, Delay, Master, XY_X, XY_Y = 9)
-    if (params.size() != 9)
+    // ADSR=4, Reverb, Inharmonicity, Delay, Master, XY_X, XY_Y = 10
+    if (params.size() != 10)
     {
-        std::cerr << "FAIL: expected 9 parameters, got " << params.size() << "\n";
+        std::cerr << "FAIL: expected 10 parameters, got " << params.size() << "\n";
         ++failed;
     }
 
     const char* expectedIds[] = {
         Parameters::ATTACK, Parameters::DECAY, Parameters::SUSTAIN, Parameters::RELEASE,
-        Parameters::REVERB, Parameters::DELAY_TIME, Parameters::MASTER_VOL,
+        Parameters::REVERB, Parameters::INHARMONICITY, Parameters::DELAY_TIME, Parameters::MASTER_VOL,
         Parameters::XY_X, Parameters::XY_Y
     };
-    for (int i = 0; i < params.size() && i < 9; ++i)
+    for (int i = 0; i < params.size() && i < 10; ++i)
     {
         auto* p = params[i];
         if (p == nullptr)
@@ -76,6 +77,66 @@ static int runParameterLayoutTests()
     return failed;
 }
 
+static int runSchuckYoungPartialTest()
+{
+    const float f1 = SchuckYoung::fundamentalHzFromMidi(60.0f);
+    const float f2Harmonic = f1 * 2.0f;
+    const float f2Stiff = SchuckYoung::partialHz(f1, 2, SchuckYoung::kReferenceBeta);
+    if (f2Stiff <= f2Harmonic)
+    {
+        std::cerr << "FAIL: Schuck–Young partial should stretch above harmonic f2\n";
+        return 1;
+    }
+    const int partialsHigh = SchuckYoung::activePartialCountForMidi(90, 30);
+    if (partialsHigh > 8)
+    {
+        std::cerr << "FAIL: high note partial cull expected <=8 got " << partialsHigh << "\n";
+        return 1;
+    }
+    std::cout << "Schuck–Young f2 ratio: " << (f2Stiff / f2Harmonic) << "\n";
+    return 0;
+}
+
+static int runFirstNotePeakTest()
+{
+    MatildaPianoAudioProcessor processor;
+    processor.prepareToPlay(44100.0, 512);
+
+    juce::AudioBuffer<float> buffer(2, 512);
+    float blockPeak = 0.0f;
+    float maxBlockPeak = 0.0f;
+
+    for (int block = 0; block < 120; ++block)
+    {
+        buffer.clear();
+        juce::MidiBuffer midi;
+        if (block == 0)
+            midi.addEvent(juce::MidiMessage::noteOn(1, 60, (juce::uint8) 110), 0);
+        if (block == 100)
+            midi.addEvent(juce::MidiMessage::noteOff(1, 60), 0);
+
+        processor.processBlock(buffer, midi);
+        blockPeak = buffer.getMagnitude(0, 512);
+        blockPeak = juce::jmax(blockPeak, buffer.getMagnitude(1, 512));
+        maxBlockPeak = juce::jmax(maxBlockPeak, blockPeak);
+
+        if (blockPeak > 1.05f)
+        {
+            std::cerr << "FAIL: block peak spike " << blockPeak << " at block " << block << "\n";
+            processor.releaseResources();
+            return 1;
+        }
+    }
+
+    processor.releaseResources();
+    if (maxBlockPeak < 0.0001f)
+    {
+        std::cerr << "FAIL: first-note test silent maxPeak=" << maxBlockPeak << "\n";
+        return 1;
+    }
+    std::cout << "First-note max block peak: " << maxBlockPeak << "\n";
+    return 0;
+}
 
 static int runDenseMidiRenderTest()
 {
@@ -167,6 +228,8 @@ int main(int argc, char* argv[])
 
     int failed = 0;
     failed += runParameterLayoutTests();
+    failed += runSchuckYoungPartialTest();
+    failed += runFirstNotePeakTest();
     failed += runMidiRenderTest();
     failed += runDenseMidiRenderTest();
     failed += runOutOfRangeNoteTest();

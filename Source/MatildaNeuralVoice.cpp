@@ -1,5 +1,6 @@
 #include "MatildaNeuralVoice.h"
 #include "MatildaNeuralSound.h"
+#include "PhysicalBlendTables.h"
 #include <cmath>
 
 std::default_random_engine MatildaNeuralVoice::randomGenerator;
@@ -213,16 +214,45 @@ void MatildaNeuralVoice::clampAmplitudes(std::vector<float>& amplitudes)
 
 void MatildaNeuralVoice::normalizeAmplitudeEnergy(std::vector<float>& amplitudes, float maxAbsSum)
 {
-    float absSum = 0.0f;
-    for (const float value : amplitudes)
-        absSum += std::abs(value);
-
+    float absSum = amplitudeAbsSum(amplitudes, amplitudes.size());
     if (absSum > maxAbsSum && absSum > 0.0f)
     {
         const float scale = maxAbsSum / absSum;
         for (float& value : amplitudes)
             value *= scale;
     }
+}
+
+float MatildaNeuralVoice::amplitudeAbsSum(const std::vector<float>& amplitudes, size_t count)
+{
+    float absSum = 0.0f;
+    const size_t limit = juce::jmin(count, amplitudes.size());
+    for (size_t i = 0; i < limit; ++i)
+        absSum += std::abs(amplitudes[i]);
+    return absSum;
+}
+
+void MatildaNeuralVoice::recomputePartialPhaseIncrements(bool force)
+{
+    const float fundamental = SchuckYoung::fundamentalHzFromMidi(static_cast<float>(currentMidiNote));
+    const float previousBeta = inharmonicityBeta;
+    inharmonicityBeta += (targetInharmonicityBeta - inharmonicityBeta) * 0.002f;
+
+    if (!force && std::abs(inharmonicityBeta - previousBeta) < 1.0e-8f
+        && partialPhaseIncrements.size() == static_cast<size_t>(activePartialCount))
+        return;
+
+    partialPhaseIncrements.resize(static_cast<size_t>(activePartialCount));
+    for (int i = 0; i < activePartialCount; ++i)
+    {
+        const float hz = SchuckYoung::partialHz(fundamental, i + 1, inharmonicityBeta);
+        partialPhaseIncrements[static_cast<size_t>(i)] =
+            SchuckYoung::phaseIncrementPerSample(hz, sampleRate);
+    }
+
+    period = juce::jmax(1.0f, sampleRate / juce::jmax(20.0f, fundamental));
+    deltaStep = SchuckYoung::phaseIncrementPerSample(fundamental, sampleRate);
+    physicalPhaseScale = fundamental / juce::jmax(1.0f, sampleRate);
 }
 
 void MatildaNeuralVoice::seedDefaultAmplitudes()
@@ -266,7 +296,7 @@ void MatildaNeuralVoice::acceptInferenceResult(std::vector<float>&& output, uint
     if (!output.empty())
     {
         clampAmplitudes(output);
-        normalizeAmplitudeEnergy(output, 1.2f);
+        normalizeAmplitudeEnergy(output, 0.45f);
     }
 
     const std::lock_guard<std::mutex> lock(pendingMutex);
@@ -282,19 +312,64 @@ void MatildaNeuralVoice::acceptInferenceResult(std::vector<float>&& output, uint
 
 void MatildaNeuralVoice::harvestInferenceResults()
 {
+    if (samplesSinceNoteOn < INFERENCE_HANDOFF_DELAY_SAMPLES)
+        return;
+
     std::lock_guard<std::mutex> lock(pendingMutex);
     if (!pendingReady || pendingGeneration != inferenceGeneration.load(std::memory_order_acquire))
         return;
 
-    normalizeAmplitudeEnergy(pendingAmplitudes, 1.2f);
+    const size_t partialLimit = juce::jmin(pendingAmplitudes.size(), currentAmplitudes.size());
+    const float currentEnergy = amplitudeAbsSum(currentAmplitudes, partialLimit);
+    normalizeAmplitudeEnergy(pendingAmplitudes, juce::jmax(0.35f, currentEnergy * 1.15f));
 
-    for (size_t i = 0; i < targetAmplitudes.size(); ++i)
+    const float ramp = juce::jlimit(0.0f, 1.0f,
+        static_cast<float>(samplesSinceNoteOn - INFERENCE_HANDOFF_DELAY_SAMPLES)
+            / static_cast<float>(INFERENCE_BLEND_RAMP_SAMPLES));
+    const float blend = 0.03f + ramp * 0.22f;
+
+    for (size_t i = 0; i < partialLimit; ++i)
     {
         targetAmplitudes[i] = currentAmplitudes[i]
-            + (pendingAmplitudes[i] - currentAmplitudes[i]) * 0.3f;
+            + (pendingAmplitudes[i] - currentAmplitudes[i]) * blend;
     }
 
+    normalizeAmplitudeEnergy(targetAmplitudes, juce::jmax(0.4f, currentEnergy * 1.2f));
     pendingReady = false;
+}
+
+float MatildaNeuralVoice::computePhysicalBlendSample(int channelIndex)
+{
+    if (physicalHarmonics.empty() || physicalPhaseScale <= 0.0f)
+        return 0.0f;
+
+    const auto& phases = (channelIndex == 0) ? physicalPhasesLeft : physicalPhasesRight;
+    float sum = 0.0f;
+    for (size_t i = 0; i < physicalHarmonics.size(); ++i)
+    {
+        const float f = physicalHarmonics[i] * physicalPhaseScale;
+        const float h = static_cast<float>(physicalTimeStep) * f * juce::MathConstants<float>::twoPi;
+        const float decay = std::exp(-0.0003f * h);
+        sum += physicalAmplitudes[i] * std::sin(phases[i] + h) * decay;
+    }
+    return sum;
+}
+
+void MatildaNeuralVoice::setInharmonicity(float normalized01)
+{
+    targetInharmonicityBeta = SchuckYoung::betaFromNormalized(normalized01);
+}
+
+void MatildaNeuralVoice::setPerformanceMorph(float hardness01, float cabinetResonance01)
+{
+    hardnessMorph = juce::jlimit(0.0f, 1.0f, hardness01);
+    cabinetResonance = juce::jlimit(0.0f, 1.0f, cabinetResonance01);
+    juce::ignoreUnused(hardnessMorph);
+}
+
+void MatildaNeuralVoice::setSustainPedalDown(bool isDown)
+{
+    sustainPedalDown = isDown;
 }
 
 void MatildaNeuralVoice::setSampleRate(double sr)
@@ -319,15 +394,30 @@ void MatildaNeuralVoice::startNote(int midiNoteNumber, float velocity,
     currentPitch = juce::jlimit(0.0f, 1.0f, (currentMidiNote - 21.0f) / 87.0f);
     
     sampleCounter = 0;
+    samplesSinceNoteOn = 0;
+    physicalTimeStep = 0;
     tailOff =  1.0f;
     tailOffRatio = DEFAULT_TAIL_OFF_RATIO;
     currentDecay = 1.0f;
-    
-    const float frequency = juce::jmax(20.0f,
-        440.0f * std::pow(2.0f, (currentMidiNote - 69.0f) / 12.0f));
-    period = juce::jmax(1.0f, sampleRate / frequency);
-    deltaStep = juce::MathConstants<float>::twoPi * frequency / sampleRate;
-    
+
+    activePartialCount = SchuckYoung::activePartialCountForMidi(
+        currentMidiNote, static_cast<int>(targetAmplitudes.size()));
+    recomputePartialPhaseIncrements(true);
+
+    physicalHarmonics = PhysicalBlend::frequencyRatiosForMidi(currentMidiNote);
+    physicalAmplitudes = PhysicalBlend::amplitudesForMidi(currentMidiNote);
+    physicalPhasesLeft.clear();
+    physicalPhasesRight.clear();
+    if (!physicalHarmonics.empty())
+    {
+        physicalPhasesLeft.push_back(phaseDistribution(randomGenerator));
+        physicalPhasesRight.push_back(phaseDistribution(randomGenerator));
+        for (size_t i = 1; i < physicalHarmonics.size(); ++i)
+        {
+            physicalPhasesLeft.push_back(physicalPhasesLeft.back() + phaseDistribution(randomGenerator));
+            physicalPhasesRight.push_back(physicalPhasesRight.back() + phaseDistribution(randomGenerator));
+        }
+    }
     for (size_t i = 0; i < phasesLeft.size(); ++i)
     {
         phasesLeft[i] = phaseDistribution(randomGenerator);
@@ -381,6 +471,8 @@ void MatildaNeuralVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         return;
 
     harvestInferenceResults();
+
+    recomputePartialPhaseIncrements(false);
 
     if (keyIsDown)
     {
@@ -437,7 +529,9 @@ void MatildaNeuralVoice::computeNextSample()
     constexpr float smoothingRate = 120.0f;
     const float smoothingFactor = juce::jmin(1.0f, smoothingRate / sampleRate);
     
-    for (size_t i = 0; i < currentAmplitudes.size(); ++i)
+    const size_t partialLimit = juce::jmin(currentAmplitudes.size(),
+                                           static_cast<size_t>(activePartialCount));
+    for (size_t i = 0; i < partialLimit; ++i)
         currentAmplitudes[i] += (targetAmplitudes[i] - currentAmplitudes[i]) * smoothingFactor;
     
     const float currentPeriod = static_cast<float>(sampleCounter) / period;
@@ -450,13 +544,24 @@ void MatildaNeuralVoice::computeNextSample()
     outputSample[0] = 0.0f;
     outputSample[1] = 0.0f;
     
-    const float step = static_cast<float>(sampleCounter) * deltaStep;
-    
-    for (size_t i = 0; i < currentAmplitudes.size(); ++i)
+    const float step = static_cast<float>(sampleCounter);
+    for (size_t i = 0; i < partialLimit; ++i)
     {
-        const float partialStep = static_cast<float>(i + 1) * step;
+        const float partialStep = step * partialPhaseIncrements[i];
         outputSample[0] += currentAmplitudes[i] * std::sin(phasesLeft[i] + partialStep);
         outputSample[1] += currentAmplitudes[i] * std::sin(phasesRight[i] + partialStep);
+    }
+
+    const float physicalWeight = PhysicalBlend::neuralBlendWeight(
+        currentPitch, cabinetResonance, sustainPedalDown);
+    if (physicalWeight > 0.001f)
+    {
+        const float physicalL = computePhysicalBlendSample(0);
+        const float physicalR = computePhysicalBlendSample(1);
+        const float neuralWeight = 1.0f - physicalWeight;
+        outputSample[0] = outputSample[0] * neuralWeight + physicalL * physicalWeight;
+        outputSample[1] = outputSample[1] * neuralWeight + physicalR * physicalWeight;
+        ++physicalTimeStep;
     }
     
     outputSample[0] *= envelope * 0.5f;
@@ -469,6 +574,7 @@ void MatildaNeuralVoice::computeNextSample()
     if (!std::isfinite(outputSample[1])) outputSample[1] = 0.0f;
     
     ++sampleCounter;
+    ++samplesSinceNoteOn;
 }
 
 bool MatildaNeuralVoice::isVoiceActive() const

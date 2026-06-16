@@ -173,7 +173,7 @@ MatildaPianoAudioProcessorEditor::MatildaPianoAudioProcessorEditor(MatildaPianoA
       sustainAttachment(p.getValueTreeState(), Parameters::SUSTAIN, sustainSlider),
       releaseAttachment(p.getValueTreeState(), Parameters::RELEASE, releaseSlider),
       reverbAttachment(p.getValueTreeState(), Parameters::REVERB, reverbSlider),
-      delayTimeAttachment(p.getValueTreeState(), Parameters::DELAY_TIME, delayTimeSlider),
+      delayTimeAttachment(p.getValueTreeState(), Parameters::INHARMONICITY, delayTimeSlider),
       masterVolAttachment(p.getValueTreeState(), Parameters::MASTER_VOL, masterVolSlider),
       keyboardComponent(p.getKeyboardState(), juce::MidiKeyboardComponent::horizontalKeyboard)
 {
@@ -209,7 +209,7 @@ MatildaPianoAudioProcessorEditor::MatildaPianoAudioProcessorEditor(MatildaPianoA
     }
     
     reverbSlider.setRange(Parameters::REVERB_MIN, Parameters::REVERB_MAX, 0.01);
-    delayTimeSlider.setRange(Parameters::DELAY_TIME_MIN, Parameters::DELAY_TIME_MAX, 0.01);
+    delayTimeSlider.setRange(Parameters::INHARMONICITY_MIN, Parameters::INHARMONICITY_MAX, 0.01);
     masterVolSlider.setRange(Parameters::MASTER_VOL_MIN, Parameters::MASTER_VOL_MAX, 0.01);
     
     auto initSmallLabel = [&](juce::Label& lbl, const juce::String& text, bool uppercase = false)
@@ -225,21 +225,21 @@ MatildaPianoAudioProcessorEditor::MatildaPianoAudioProcessorEditor(MatildaPianoA
     // Knob labels (match Figma text nodes)
     initSmallLabel(attackLabel, "Attack");
     initSmallLabel(decayLabel, "Decay");
-    initSmallLabel(sustainLabel, "Sustain");
+    initSmallLabel(sustainLabel, "Velocity");
     initSmallLabel(releaseLabel, "Release");
     initSmallLabel(reverbLabel, "Reverb");
     initSmallLabel(masterVolLabel, "Master\nvol."); // Two lines like Delay label
 
-    // Delay time label
-    delayTimeLabel.setText("Delay\n(1/4)", juce::dontSendNotification);
+    // Inharmonicity label (middle black knob — v4)
+    delayTimeLabel.setText("Inharm-\nonicity", juce::dontSendNotification);
     delayTimeLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     delayTimeLabel.setJustificationType(juce::Justification::centred);
     delayTimeLabel.setFont(juce::Font(juce::FontOptions(12.0f)));
     delayTimeLabel.setInterceptsMouseClicks(false, false);
     addAndMakeVisible(delayTimeLabel);
     
-    // Update delay time label when slider changes
-    delayTimeSlider.onValueChange = [this] { updateDelayTimeLabel(); };
+    // Inharmonicity knob — no dynamic label updates
+    delayTimeSlider.onValueChange = nullptr;
     
     // XY Pad
     xyPad = std::make_unique<XYPadComponent>(p.getValueTreeState());
